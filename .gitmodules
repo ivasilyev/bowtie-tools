@@ -1,0 +1,6 @@
+[submodule "Misc"]
+	path = Misc
+	url = https://github.com/ivasilyev/Misc.git
+[submodule "matryoshka"]
+	path = matryoshka
+	url = https://github.com/ivasilyev/matryoshka.git
