@@ -16,7 +16,7 @@ def parse_args():
     starting_parser.add_argument("-a", "--annotation", required=True,
                                  help="Text file supplied with a header containing additional information about sequence headers across all sequence chunks")
     starting_parser.add_argument("-m", "--mask", default='',
-                                 help="Mask before the '_coverage.txt' substring")
+                                 help="Mask after the '<sample_name>_' and before the '_coverage.txt' substrings")
     starting_parser.add_argument("-o", "--output", required=True,
                                  help="Output directory")
     return starting_parser.parse_args()
