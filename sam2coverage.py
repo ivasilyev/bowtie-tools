@@ -148,7 +148,7 @@ def stack_coverage(sam_file):
     for row in coverages_list:
         row_list = row.split('\t')
         # remove service lines
-        if len(row_list[0].strip()) > 0 and row_list[0].strip() != 'genome' and row_list[0].strip() != '*':
+        if len(row_list[0].strip()) > 0 and row_list[0].strip() != 'genome' and '*' not in row_list[0]:
             if row_list[0] == counting_id and int(row_list[1]) > 0:
                 row_processing_buffer.append(row_list)
             else:
@@ -203,7 +203,7 @@ def bedtools2coverage_sum(bedtools_coverage_file):
     for raw_line in file_parsed:
         if raw_line is not None:
             processed_line = raw_line.replace('\r', '\n').replace('\n', '').split('\t')
-            if not processed_line[0].startswith("genome\t") and not processed_line[0].startswith("*\t"):
+            if not processed_line[0].startswith("genome\t") and '*' not in processed_line[0]:
                 if processed_line[1] != 0:
                     coverage_sum += (int(processed_line[1]) * int(processed_line[2]))
     return coverage_sum
@@ -215,7 +215,7 @@ def idxstats2reads_sum(idxstats_file):
     for raw_line in file_parsed:
         if raw_line is not None:
             processed_line = raw_line.replace('\r', '\n').replace('\n', '').split('\t')
-            if not processed_line[0].startswith("genome\t") and not processed_line[0].startswith("*\t"):
+            if not processed_line[0].startswith("genome\t") and '*' not in processed_line[0]:
                 reads_sum += int(processed_line[2])
     return reads_sum
 
