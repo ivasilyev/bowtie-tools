@@ -228,7 +228,7 @@ def reference2statistics(sam_file):
     reference_df = pd.read_table(referenceGenomeLengths, header='infer', sep='\t', names=['reference_id', 'id_bp'])
     stacked_coverages_df = pd.read_table(outputDir + "Statistics/" + sample_name + "_pos_bp.txt", sep='\t', header='infer', names=["reference_id", "id_maximal_coverage_depth", "id_coverage_breadth", "id_bp", "id_coverage_breadth_to_id_bp", "id_mapped_bp"])
     genomes_coverages_df = pd.merge(reference_df, stacked_coverages_df.loc[:, [column for column in list(stacked_coverages_df) if column != "id_bp"]], on="reference_id", how='outer')
-    genomes_coverages_df = genomes_coverages_df.loc[(genomes_coverages_df['reference_id'] != 'genome') & (genomes_coverages_df['reference_id'] != '*')]
+    genomes_coverages_df = genomes_coverages_df.loc[(genomes_coverages_df['reference_id'] != 'genome') & (~genomes_coverages_df['reference_id'].str.contains('*'))]
     genomes_coverages_df["id_total_relative_abundance"] = genomes_coverages_df.loc[:, "id_mapped_bp"] / (genomes_coverages_df.loc[:, "id_bp"] * sample_total_bp)
     genomes_coverages_df["id_mapped_relative_abundance"] = genomes_coverages_df.loc[:, "id_mapped_bp"] / (genomes_coverages_df.loc[:, "id_bp"] * sample_mapped_bp)
     genomes_coverages_df["sample_total_reads"] = sample_total_reads
@@ -250,7 +250,6 @@ def reference2statistics(sam_file):
     for int_column in ["id_bp", "id_coverage_breadth", "id_mapped_bp", "id_maximal_coverage_depth", "id_mapped_reads", "sample_total_reads", "sample_mapped_reads", "sample_total_bp", "sample_mapped_bp"]:
         output_df[int_column] = output_df.loc[:, int_column].astype(int)
     output_df.to_csv(output_coverage_file, sep='\t', index=False)
-
     logging.info("Successfully extracted coverage into: " + output_coverage_file)
 
 
