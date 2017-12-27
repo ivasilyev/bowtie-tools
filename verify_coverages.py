@@ -18,7 +18,7 @@ def parse_args():
     starting_parser.add_argument("-m", "--mask", default='',
                                  help="Mask after the '<sample_name>_' and before the '_coverage.txt' substrings")
     starting_parser.add_argument("-o", "--output", required=True,
-                                 help="Output directory")
+                                 help="Output file or directory to place auto named file")
     return starting_parser.parse_args()
 
 
@@ -84,7 +84,6 @@ def list_based_dict_export(input_list, input_dict, output_file):
 
 if __name__ == '__main__':
     inputSampleDataFileName, inputReferenceAnnotation, outputMask, outputDir = parse_namespace()
-    outputDir = ends_with_slash(outputDir)
     annotationRowsCount = int(subprocess.getoutput("wc -l < " + inputReferenceAnnotation).split('\n')[0])
     inputSampleDataRowsList = file_to_list(inputSampleDataFileName)
     verifiedSamplesDataFrame = assembly_df_from_series_list(multi_core_queue(mp_verify_sd_and_cov, inputSampleDataRowsList), "sample_name")
@@ -96,6 +95,10 @@ if __name__ == '__main__':
     if len(noSampleDataDF) > 0:
         print("Warning! The sources of following samples have not been found: '" + "', '".join(noSampleDataDF["sample_name"].values.tolist()) +  "'.\nPlease check the provided data: " + inputSampleDataFileName)
     if len(toDoDF) > 0:
-        outputSampleDataFileName = outputDir + get_time() + ".sampledata"
+        if os.path.isdir(outputDir):
+            outputDir = ends_with_slash(outputDir)
+            outputSampleDataFileName = outputDir + get_time() + ".sampledata"
+        else:
+            outputSampleDataFileName = outputDir
         list_based_dict_export(toDoDF["sample_name"].values.tolist(), {i.split('\t')[0].strip(): i.split('\t')[1:] for i in inputSampleDataRowsList if len(i.split('\t')[0].strip()) > 0}, outputSampleDataFileName)
         print("Files to process have been dumped into:", outputSampleDataFileName)
