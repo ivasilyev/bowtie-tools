@@ -247,7 +247,7 @@ if __name__ == '__main__':
     hostNameString = subprocess.getoutput("hostname")
     scriptDir = ends_with_slash('/'.join(os.path.abspath(sys.argv[0]).split('/')[:-1]))
 
-    q = RedisWQ(name="filtering_pipeline_docker", host="redis")
+    q = RedisWQ(name="bwt_filtering_pipeline_docker", host="redis")
     print("Worker with sessionID: " + q.sessionID())
     print("Initial queue state: empty=" + str(q.empty()))
     sampledata_queue_list = []
