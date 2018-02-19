@@ -225,10 +225,10 @@ def get_time():
 
 if __name__ == "__main__":
     inputSampleData, inputRefData, referenceBwtMask, referenceFai, referenceGenomeLengths, referenceAnnotation, outputMask, cpuThreadsString, noCoverageExtractionBool, outputDir = parse_namespace()
-
+    scriptDir = ends_with_slash(os.path.dirname(os.path.realpath(sys.argv[0])))
     if inputRefData:
         inputRefDataList = file_to_list(inputRefData)[0].split('\t')
-        # refdata columns: fasta, bwti, bwti2, fai, genome...
+        # refdata columns: fasta, bwti, bwti2, fai, genome, annotation
         referenceFai, referenceGenomeLengths = inputRefDataList[3:5]
     inputSampleDataList = file_to_list(inputSampleData)
     for processed_sampledata_row in inputSampleDataList:
@@ -237,21 +237,19 @@ if __name__ == "__main__":
             sys.exit(2)
         if False in [os.path.isfile(input_path) for input_path in processed_sampledata_row.split('\t')[1:]]:
             inputSampleDataList.remove(processed_sampledata_row)
-
     currentTime = get_time()
     logging.basicConfig(format=u'%(levelname)-8s [%(asctime)s] %(message)s', level=logging.DEBUG, filename=outputDir + "Statistics/" + "_".join([filename_only(sys.argv[0]), outputMask, currentTime, "master.log"]))
     logging.info("Command: " + ' '.join(str(i) for i in sys.argv))
     logging.info("Main process ID: " + str(os.getpid()))
     logging.info("Using CPU threads: " + cpuThreadsString)
-
     single_core_queue(bowtie_it, inputSampleDataList)
-    if referenceFai and referenceGenomeLengths:
-        if os.path.isfile(ends_with_slash(os.path.dirname(os.path.realpath(sys.argv[0]))) + "sam2coverage.py") and not noCoverageExtractionBool:
+    if referenceFai and referenceGenomeLengths and not noCoverageExtractionBool:
+        if os.path.isfile(scriptDir + "sam2coverage.py"):
             logging.info("Starting coverage extract...")
             multi_core_queue(coverage_extract, inputSampleDataList)
         else:
             logging.fatal("Input parameters were specified but the coverage extractor script has not been found!")
-            logging.fatal("Please put 'sam2coverage.py' into the directory: " + os.path.dirname(os.path.realpath(sys.argv[0])))
+            logging.fatal("Please put 'sam2coverage.py' into the directory: " + scriptDir)
             sys.exit(2)
     logging.info("ALIGNMENT COMPLETED")
     print("ALIGNMENT COMPLETED")
