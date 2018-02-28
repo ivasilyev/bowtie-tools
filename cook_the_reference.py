@@ -10,17 +10,19 @@ import subprocess
 
 
 def parse_args():
-    starting_parser = argparse.ArgumentParser(description="This tool automatically fixes, cuts and indexes DNA sequences in FASTA format. \nRequired software: bowtie, bowtie2, samtools.")
+    starting_parser = argparse.ArgumentParser(description="This tool automatically fixes, cuts and indexes DNA sequences in FASTA format. \nRequired software: bowtie, bowtie2, samtools")
     starting_parser.add_argument("-i", "--input", required=True,
-                                 help="Reference DNA FASTA file;")
-    starting_parser.add_argument("-s", "--size", type=float, default=3.6,
-                                 help="(Optional) Sequence chunk size in billion characters, 3.6 ;")
-    starting_parser.add_argument("-t", "--threads", type=int, default=int(multiprocessing.cpu_count()),
-                                 help="(Optional) Number of CPU cores to speed up the chunks processing, maximal by default;")
+                                 help="Reference DNA sequence file in FASTA format")
+    starting_parser.add_argument("-h", "--preserve_headers", default=False, action="store_true",
+                                 help="(Optional) Disables the headers correction")
     starting_parser.add_argument("-n", "--not_large_index", default=False, action="store_true",
-                                 help="(Optional) Avoid usage of a 'large' index, enables sequence splitting;")
+                                 help="(Optional) Avoid usage of a 'large' index, enables sequence splitting")
+    starting_parser.add_argument("-s", "--size", type=float, default=3.6,
+                                 help="(Optional) Sequence chunk size in billion charactersif '--not_large_index' is present, 3.6 by default")
+    starting_parser.add_argument("-t", "--threads", type=int, default=int(multiprocessing.cpu_count()),
+                                 help="(Optional) Number of CPU cores to speed up the chunks processing, maximal by default")
     starting_parser.add_argument("-o", "--output", required=True,
-                                 help="Output directory. Must not exist and shall be created.")
+                                 help="Output directory. Must not exist and has to be created")
     return starting_parser.parse_args()
 
 
@@ -42,7 +44,7 @@ def parse_namespace():
         if ' ' in path:
             print("The path must not contain spaces: " + path + "\n Exiting...")
             sys.exit(2)
-    return str(os.path.abspath(namespace.input)), int(float(namespace.size) * 10 ** 9), int(namespace.threads), namespace.not_large_index, namespace.output
+    return str(os.path.abspath(namespace.input)), namespace.preserve_headers, int(float(namespace.size) * 10 ** 9), int(namespace.threads), namespace.not_large_index, namespace.output
 
 
 def file_to_str(file):
@@ -104,6 +106,8 @@ def external_route(input_direction, output_direction):
 
 
 def process_header(input_header):
+    if preserveHeadersBool:
+        return input_header
     return '>' + re.sub('_+', '_', re.sub('\W+', '_', input_header)).strip('_') + '\n'
 
 
@@ -263,7 +267,7 @@ def sequence2chunks_list(sequence_file):
 
 
 if __name__ == "__main__":
-    inputFile, chunkSize, threadsNumber, notLargeIndexes, outputDir = parse_namespace()
+    inputFile, preserveHeadersBool, chunkSize, threadsNumber, notLargeIndexes, outputDir = parse_namespace()
     fixedHeadersDict = fasta_headers_fix(inputFile)
     fixedHeadersDict["Reference_ID"] = "Former_ID"
     chunks = sequence2chunks_list(outputDir + filename_only(inputFile) + ".fasta")
