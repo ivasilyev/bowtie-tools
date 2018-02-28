@@ -112,9 +112,9 @@ def single_core_queue(function_to_do, queue):
     return [function_to_do(queue_row) for queue_row in queue]
 
 
-def multi_core_queue(function_to_parallelize, queue):
+def multi_core_queue(function_name, queue):
     pool = multiprocessing.Pool(processes=int(cpuThreadsString))
-    pool.map(function_to_parallelize, queue)
+    pool.map(function_name, queue)
     pool.close()
     pool.join()
 

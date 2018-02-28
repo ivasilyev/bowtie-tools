@@ -27,9 +27,9 @@ def parse_namespace():
     return namespace.sampledata, namespace.annotation, namespace.mask, namespace.output
 
 
-def multi_core_queue(function_to_parallelize, queue):
+def multi_core_queue(function_name, queue):
     pool = multiprocessing.Pool()
-    output = pool.map(function_to_parallelize, queue)
+    output = pool.map(function_name, queue)
     pool.close()
     pool.join()
     return output

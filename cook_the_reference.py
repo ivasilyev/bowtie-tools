@@ -81,9 +81,9 @@ def list_to_file(list_to_write, file_to_write):
     file.close()
 
 
-def multi_core_queue(function):
+def multi_core_queue(function_name):
     pool = multiprocessing.Pool(threadsNumber)
-    pool.map(function, chunks)
+    pool.map(function_name, chunks)
     pool.close()
     pool.join()
 
