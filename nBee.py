@@ -159,6 +159,7 @@ def bowtie_it(single_sampledata):
     external_output_1 = outputDir + "Non-mapped_reads/" + sample_name + "_no_" + outputMask + reads_file_extension
     external_log = outputDir + "Statistics/" + sample_name + "_" + outputMask + "_bowtie.log"
     make_cleanup([external_output_0, external_output_1, external_log])
+    unmapped_reads_files_list = [external_output_1]
     if reads_file_path.endswith(".csfasta"):
         if len(list(filter(None, reads_file_path.split('\t')))) != 1:
             logging.fatal("Failed to parse single reads! The sampledata must contain exactly 2 columns!")
@@ -170,7 +171,6 @@ def bowtie_it(single_sampledata):
             bwt_index = referenceBwtMask
         external_route(['bowtie', '-f', '-C', '-S', '-t', '-v', '3', '-k', '1', '--threads', cpuThreadsString, '--un', external_output_1, bwt_index, reads_file_path, external_output_0],
                        external_log)
-        file_append(sample_name + '\t' + external_output_1 + '\n', outputDir + "Statistics/_non-mapped_reads_" + outputMask + '_' + currentTime + ".sampledata")
     else:
         paired_reads_list = [i for i in reads_file_path.split('\t') if len(i) > 0]
         if inputRefData:
@@ -182,8 +182,8 @@ def bowtie_it(single_sampledata):
         else:
             command_list = ['bowtie2', '--un', external_output_1]
         if len(paired_reads_list) > 2 or len(paired_reads_list) == 0:
-            logging.fatal("Failed to parse paired reads! The sampledata must contain exactly 3 columns!")
-            sys.exit(2)
+            logging.warning("Failed to parse paired reads! The sampledata must contain exactly 3 columns!")
+            return
         elif len(paired_reads_list) == 1:
             logging.info("Mapping single reads with bowtie2")
             external_route(command_list + ['-x', bwt_index, reads_file_path, '--threads', cpuThreadsString, '-S', external_output_0],
@@ -192,9 +192,16 @@ def bowtie_it(single_sampledata):
             logging.info("Mapping mate-pair reads with bowtie2")
             external_route(command_list + ['-x', bwt_index, '-1', paired_reads_list[0], '-2', paired_reads_list[1], '--threads', cpuThreadsString, '-S', external_output_0],
                            external_log.replace("_bowtie.log", "_bowtie2.log"))
-        file_append('\t'.join(j for j in [sample_name, external_output_1.replace(reads_file_extension, '.1' + reads_file_extension), external_output_1.replace(reads_file_extension, '.2' + reads_file_extension)]) + '\n', outputDir + "Statistics/_non-mapped_reads_" + outputMask + '_' + currentTime + ".sampledata")
-    file_append(sample_name + '\t' + external_output_0 + '\n', outputDir + "Statistics/_mapped_reads_" + outputMask + '_' + currentTime + ".sampledata")
-    logging.info("Successfully aligned: " + reads_file_path)
+            unmapped_reads_files_list = [external_output_1.replace(reads_file_extension, '.1' + reads_file_extension), external_output_1.replace(reads_file_extension, '.2' + reads_file_extension)]
+    if all(os.path.isfile(i) for i in unmapped_reads_files_list):
+        file_append('\t'.join(j for j in [sample_name] + unmapped_reads_files_list) + '\n', outputDir + "Statistics/_non-mapped_reads_" + outputMask + '_' + currentTime + ".sampledata")
+    else:
+        logging.warning("Some output files are missing: ", str(unmapped_reads_files_list))
+    if os.path.isfile(external_output_0):
+        file_append(sample_name + '\t' + external_output_0 + '\n', outputDir + "Statistics/_mapped_reads_" + outputMask + '_' + currentTime + ".sampledata")
+        logging.info("Successfully aligned: " + reads_file_path)
+    else:
+        logging.warning("The output SAM file is missing: " + external_output_0)
 
 
 def coverage_extract(single_sampledata):
