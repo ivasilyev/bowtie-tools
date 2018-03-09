@@ -13,7 +13,7 @@ def parse_args():
     starting_parser = argparse.ArgumentParser(description="This tool automatically fixes, cuts and indexes DNA sequences in FASTA format. \nRequired software: bowtie, bowtie2, samtools")
     starting_parser.add_argument("-i", "--input", required=True,
                                  help="Reference DNA sequence file in FASTA format")
-    starting_parser.add_argument("-h", "--preserve_headers", default=False, action="store_true",
+    starting_parser.add_argument("-p", "--preserve_headers", default=False, action="store_true",
                                  help="(Optional) Disables the headers correction")
     starting_parser.add_argument("-n", "--not_large_index", default=False, action="store_true",
                                  help="(Optional) Avoid usage of a 'large' index, enables sequence splitting")
