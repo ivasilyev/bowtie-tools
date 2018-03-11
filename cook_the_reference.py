@@ -5,6 +5,7 @@ import os
 import re
 import sys
 import argparse
+import threading
 import multiprocessing
 import subprocess
 
@@ -189,6 +190,7 @@ def samtools_faidx(chunk):
                    outputDir + filename_only(chunk) + "_samtools_faidx.log")
     os.rename(chunk + ".fai", outputDir + filename_only(chunk) + "_samtools.fai")
     print("Created samtools index for " + chunk)
+    fai2genome(chunk)
 
 
 def string_process(string):
@@ -206,6 +208,7 @@ def string_process(string):
 
 
 def fai2genome(chunk):
+    """Process existing fasta index, depends from 'samtools_faidx' function"""
     strings = list(filter(None, file_to_str(outputDir + filename_only(chunk) + "_samtools.fai").replace("\r", "\n").split("\n")))
     strings_processed = []
     for string in strings:
@@ -222,10 +225,19 @@ def fai2genome(chunk):
 
 
 def asynchronous_chunk_processing(chunk):
-    bowtie_build(chunk)
-    bowtie2_build(chunk)
-    samtools_faidx(chunk)
-    fai2genome(chunk)
+    """Process chopped or whole FASTA"""
+    # Initializing threads
+    t1 = threading.Thread(target=bowtie_build, args=(chunk,))
+    t2 = threading.Thread(target=bowtie2_build, args=(chunk,))
+    t3 = threading.Thread(target=samtools_faidx, args=(chunk,))
+    # Starting threads
+    t1.start()
+    t2.start()
+    t3.start()
+    # Joining threads
+    t1.join()
+    t2.join()
+    t3.join()
 
 
 def add_former_headers(headers_dict, annotation_file):
