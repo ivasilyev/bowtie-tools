@@ -25,7 +25,7 @@ def parse_args():
                                  help="(Optional) Genome file without a header containing tab-delimited sequence headers and lengths for single sequence chunk")
     starting_parser.add_argument("-a", "--annotation", default=None,
                                  help="(Optional) Text file supplied with a header containing additional information about sequence headers across all sequence chunks")
-    starting_parser.add_argument("-m", "--mask", default=None, required=True,
+    starting_parser.add_argument("-m", "--mask", default="",
                                  help="Mask to be added to resulting files containing reference database name, date etc")
     starting_parser.add_argument("-t", "--threads", default=None, type=int,
                                  help="(Optional) Number of CPU cores to use, maximal by default")
@@ -169,7 +169,7 @@ def bowtie_it(single_sampledata):
             bwt_index = inputRefDataList[1]
         else:
             bwt_index = referenceBwtMask
-        external_route(['bowtie', '-f', '-C', '-S', '-t', '-v', '3', '-k', '1', '--threads', cpuThreadsString, '--un', external_output_1, bwt_index, reads_file_path, external_output_0],
+        external_route(['bowtie', '-f', '-C', '-S', '-t', '-v', '3', '-k', '1', '--large-index', '--threads', cpuThreadsString, '--un', external_output_1, bwt_index, reads_file_path, external_output_0],
                        external_log)
     else:
         paired_reads_list = [i for i in reads_file_path.split('\t') if len(i) > 0]
