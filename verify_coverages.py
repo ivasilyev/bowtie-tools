@@ -18,7 +18,7 @@ def parse_args():
     starting_parser.add_argument("-m", "--mask", default='',
                                  help="Mask after the '<sample_name>_' and before the '_coverage.txt' substrings")
     starting_parser.add_argument("-o", "--output", required=True,
-                                 help="Output file or directory to place auto named file")
+                                 help="Path to look for coverage files. Must contain subdirectories created by 'nBee.py' script")
     return starting_parser.parse_args()
 
 
@@ -54,7 +54,7 @@ def is_coverage_exists(single_sampledata_row):
 def dict2pd_series(dictionary):
     output = pd.Series()
     for key in dictionary:
-        output = output.set_value(key, dictionary[key])
+        output.at[key] = dictionary[key]
     return output
 
 
@@ -99,6 +99,6 @@ if __name__ == '__main__':
             outputDir = ends_with_slash(outputDir)
             outputSampleDataFileName = outputDir + get_time() + ".sampledata"
         else:
-            outputSampleDataFileName = outputDir
+            raise ValueError("Not a directory:", outputDir)
         list_based_dict_export(toDoDF["sample_name"].values.tolist(), {i.split('\t')[0].strip(): i.split('\t')[1:] for i in inputSampleDataRowsList if len(i.split('\t')[0].strip()) > 0}, outputSampleDataFileName)
         print("Files to process have been dumped into:", outputSampleDataFileName)
