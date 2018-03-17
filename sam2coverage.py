@@ -131,7 +131,7 @@ def bam2coverage(sam_file):
     external_input = outputDir + "Mapped_reads/" + sample_name + ".sorted.bam"
     external_output = outputDir + "Statistics/" + sample_name + "_genomeCoverageBed.txt"
     make_cleanup([external_output])
-    external_route(['genomeCoverageBed', '-ibam', external_input, '-g', referenceGenomeLengths], external_output)
+    external_route(['genomeCoverageBed', '-ibam', external_input], external_output)
     logging.info("Successfully calculated coverage: " + external_input)
 
 

@@ -17,6 +17,8 @@ def parse_args():
                                  help="Text file supplied with a header containing additional information about sequence headers across all sequence chunks")
     starting_parser.add_argument("-m", "--mask", default='',
                                  help="Mask after the '<sample_name>_' and before the '_coverage.txt' substrings")
+    starting_parser.add_argument("-d", "--debug", default=False, action='store_true',
+                                 help="Create debugging table")
     starting_parser.add_argument("-o", "--output", required=True,
                                  help="Path to look for coverage files. Must contain subdirectories created by 'nBee.py' script")
     return starting_parser.parse_args()
@@ -24,31 +26,29 @@ def parse_args():
 
 def parse_namespace():
     namespace = parse_args()
-    return namespace.sampledata, namespace.annotation, namespace.mask, namespace.output
+    namespace.output = ends_with_slash(namespace.output)
+    if not os.path.isdir(namespace.output):
+        raise ValueError("Not a directory:", outputDir)
+    return namespace.sampledata, namespace.annotation, namespace.mask, namespace.debug, namespace.output
 
 
-def multi_core_queue(function_name, queue):
-    pool = multiprocessing.Pool()
-    output = pool.map(function_name, queue)
-    pool.close()
-    pool.join()
-    return output
+class SampleDataString:
+    def __init__(self, single_sampledata_row):
+        self._single_sampledata_list = [i.strip() for i in single_sampledata_row.split('\t') if len(i) > 0]
+        self.sample_name = self._single_sampledata_list[0]
+        self.source_paths_list = self._single_sampledata_list[1:]
+        self.coverage_path = outputDir + "Statistics/" + self.sample_name + "_" + outputMask + "_coverage.txt"
 
+    def is_source(self):
+        return all([os.path.isfile(i) for i in self.source_paths_list])
 
-def is_sampledata_exists(single_sampledata_row):
-    single_sampledata_list = single_sampledata_row.split('\t')
-    if len(single_sampledata_list) > 1:
-        return all([os.path.isfile(i.strip()) for i in single_sampledata_list[1:] if len(i.strip()) > 0])
-    return False
+    def is_coverage(self):
+        return os.path.isfile(self.coverage_path)
 
-
-def is_coverage_exists(single_sampledata_row):
-    sample_name = single_sampledata_row.split('\t')[0].strip()
-    coverage_file = outputDir + "Statistics/" + sample_name + "_" + outputMask + "_coverage.txt"
-    if len(sample_name) > 0:
-        if os.path.isfile(coverage_file):
-            return sample_name, int(subprocess.getoutput("wc -l < " + coverage_file).split('\n')[0]) == annotationRowsCount
-    return sample_name, False
+    def is_length(self):
+        if self.is_coverage():
+            return int(subprocess.getoutput("wc -l < " + self.coverage_path).split('\n')[0]) == annotationRowsCount
+        return False
 
 
 def dict2pd_series(dictionary):
@@ -58,9 +58,17 @@ def dict2pd_series(dictionary):
     return output
 
 
-def mp_verify_sd_and_cov(single_sampledata_row):
-    sample_name, coverage_bool = is_coverage_exists(single_sampledata_row)
-    return dict2pd_series({"sample_name": sample_name, "is_sampledata_exists": is_sampledata_exists(single_sampledata_row), "is_coverage_exists": coverage_bool})
+def process_single_sampledata(row):
+    sampledata = SampleDataString(row)
+    return dict2pd_series({"sample_name": sampledata.sample_name, "source_paths": ":".join(sampledata.source_paths_list), "is_source_exists": sampledata.is_source(), "coverage_paths": sampledata.coverage_path, "is_coverage_exists": sampledata.is_coverage(), "is_coverage_valid": sampledata.is_length()})
+
+
+def multi_core_queue(function_name, queue):
+    pool = multiprocessing.Pool()
+    output = pool.map(function_name, queue)
+    pool.close()
+    pool.join()
+    return output
 
 
 def assembly_df_from_series_list(series_list, sorting_col_name):
@@ -83,22 +91,16 @@ def list_based_dict_export(input_list, input_dict, output_file):
 
 
 if __name__ == '__main__':
-    inputSampleDataFileName, inputReferenceAnnotation, outputMask, outputDir = parse_namespace()
+    inputSampleDataFileName, inputReferenceAnnotation, outputMask, debuggingBool, outputDir = parse_namespace()
     annotationRowsCount = int(subprocess.getoutput("wc -l < " + inputReferenceAnnotation).split('\n')[0])
     inputSampleDataRowsList = file_to_list(inputSampleDataFileName)
-    verifiedSamplesDataFrame = assembly_df_from_series_list(multi_core_queue(mp_verify_sd_and_cov, inputSampleDataRowsList), "sample_name")
-    processedDF = verifiedSamplesDataFrame.loc[(verifiedSamplesDataFrame["is_sampledata_exists"] == True) & (verifiedSamplesDataFrame["is_coverage_exists"] == True)]
-    noSampleDataDF = verifiedSamplesDataFrame.loc[verifiedSamplesDataFrame["is_sampledata_exists"] == False]
-    toDoDF = verifiedSamplesDataFrame.loc[(verifiedSamplesDataFrame["is_sampledata_exists"] == True) & (verifiedSamplesDataFrame["is_coverage_exists"] == False)]
-    for dfDescription, dfName in zip(["Successfully processed files with extracted coverage:", "Files without source:", "Files without coverage:"], [processedDF, noSampleDataDF, toDoDF]):
-        print(dfDescription, len(dfName))
+    verifiedSamplesDataFrame = assembly_df_from_series_list(multi_core_queue(process_single_sampledata, inputSampleDataRowsList), "sample_name")
+    noSampleDataDF = verifiedSamplesDataFrame.loc[verifiedSamplesDataFrame["is_source_exists"] == False]
+    toDoDF = verifiedSamplesDataFrame.loc[(verifiedSamplesDataFrame["is_source_exists"] == True) & (verifiedSamplesDataFrame["is_coverage_valid"] == False)]
     if len(noSampleDataDF) > 0:
-        print("Warning! The sources of following samples have not been found: '" + "', '".join(noSampleDataDF["sample_name"].values.tolist()) +  "'.\nPlease check the provided data: " + inputSampleDataFileName)
-    if len(toDoDF) > 0:
-        if os.path.isdir(outputDir):
-            outputDir = ends_with_slash(outputDir)
-            outputSampleDataFileName = outputDir + get_time() + ".sampledata"
-        else:
-            raise ValueError("Not a directory:", outputDir)
-        list_based_dict_export(toDoDF["sample_name"].values.tolist(), {i.split('\t')[0].strip(): i.split('\t')[1:] for i in inputSampleDataRowsList if len(i.split('\t')[0].strip()) > 0}, outputSampleDataFileName)
-        print("Files to process have been dumped into:", outputSampleDataFileName)
+        print("Warning! The sources of following samples have not been found: '" + "', '".join(noSampleDataDF["sample_name"].values.tolist()) + "'.\nPlease check the provided data: " + inputSampleDataFileName)
+    timeString = get_time()
+    outputSampleDataFileName = outputDir + timeString + ".sampledata"
+    list_based_dict_export(toDoDF["sample_name"].values.tolist(), {i.split('\t')[0].strip(): i.split('\t')[1:] for i in inputSampleDataRowsList if len(i.split('\t')[0].strip()) > 0}, outputSampleDataFileName)
+    if debuggingBool:
+        verifiedSamplesDataFrame.to_csv(outputDir + timeString + "_debug.txt", sep='\t', index=False)
