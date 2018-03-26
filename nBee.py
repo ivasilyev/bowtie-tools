@@ -153,46 +153,54 @@ def make_cleanup(files_list):
 
 
 def bowtie_it(single_sampledata):
+    def is_path_endswith(mask, string):
+        """
+        This function is required to assign '--large-index' argument.
+        Bowtie (Bowtie2) large indexes have extension 'ebwtl' ('bt2l') while common indexes end with 'ebwt' ('bt2').
+        """
+        return any(i.endswith(string) for i in subprocess.getoutput("ls -d " + mask + "*").split("\n"))
     sample_name, reads_file_path = [single_sampledata.split('\t')[0], '\t'.join(single_sampledata.split('\t')[1:])]
     reads_file_extension = '.' + reads_file_path.split('.')[-1]
     external_output_0 = outputDir + "Mapped_reads/" + sample_name + "_" + outputMask + ".sam"
     external_output_1 = outputDir + "Non-mapped_reads/" + sample_name + "_no_" + outputMask + reads_file_extension
-    external_log = outputDir + "Statistics/" + sample_name + "_" + outputMask + "_bowtie.log"
-    make_cleanup([external_output_0, external_output_1, external_log])
     unmapped_reads_files_list = [external_output_1]
     if reads_file_path.endswith(".csfasta"):
         if len(list(filter(None, reads_file_path.split('\t')))) != 1:
             logging.fatal("Failed to parse single reads! The sampledata must contain exactly 2 columns!")
             sys.exit(2)
         logging.info("Mapping colorspace reads with bowtie")
+        external_log = outputDir + "Statistics/" + sample_name + "_" + outputMask + "_bowtie.log"
+        cmd = ['bowtie', '-f', '-C', '-S', '-t', '-v', '3', '-k', '1']
         if inputRefData:
             bwt_index = inputRefDataList[1]
         else:
             bwt_index = referenceBwtMask
-        external_route(['bowtie', '-f', '-C', '-S', '-t', '-v', '3', '-k', '1', '--large-index', '--threads', cpuThreadsString, '--un', external_output_1, bwt_index, reads_file_path, external_output_0],
-                       external_log)
+        if is_path_endswith(bwt_index, "ebwtl"):
+            cmd.append("--large-index")
+        cmd.extend(['--threads', cpuThreadsString, '--un', external_output_1, bwt_index, reads_file_path, external_output_0])
     else:
+        external_log = outputDir + "Statistics/" + sample_name + "_" + outputMask + "_bowtie2.log"
         paired_reads_list = [i for i in reads_file_path.split('\t') if len(i) > 0]
         if inputRefData:
             bwt_index = inputRefDataList[2]
         else:
             bwt_index = referenceBwtMask
         if any(reads_file_extension == "." + i for i in ["zip", "tar", "gz", "bz2"]):
-            command_list = ['bowtie2', '--un-conc-gz', external_output_1]
+            cmd = ['bowtie2', '--un-conc-gz', external_output_1]
         else:
-            command_list = ['bowtie2', '--un', external_output_1]
+            cmd = ['bowtie2', '--un', external_output_1]
         if len(paired_reads_list) > 2 or len(paired_reads_list) == 0:
             logging.warning("Failed to parse paired reads! The sampledata must contain exactly 3 columns!")
             return
         elif len(paired_reads_list) == 1:
             logging.info("Mapping single reads with bowtie2")
-            external_route(command_list + ['-x', bwt_index, reads_file_path, '--threads', cpuThreadsString, '-S', external_output_0],
-                           external_log.replace("_bowtie.log", "_bowtie2.log"))
+            cmd.extend(['-x', bwt_index, reads_file_path, '--threads', cpuThreadsString, '-S', external_output_0])
         else:
             logging.info("Mapping mate-pair reads with bowtie2")
-            external_route(command_list + ['-x', bwt_index, '-1', paired_reads_list[0], '-2', paired_reads_list[1], '--threads', cpuThreadsString, '-S', external_output_0],
-                           external_log.replace("_bowtie.log", "_bowtie2.log"))
+            cmd.extend(['-x', bwt_index, '-1', paired_reads_list[0], '-2', paired_reads_list[1], '--threads', cpuThreadsString, '-S', external_output_0])
             unmapped_reads_files_list = [external_output_1.replace(reads_file_extension, '.1' + reads_file_extension), external_output_1.replace(reads_file_extension, '.2' + reads_file_extension)]
+    make_cleanup([external_output_0, external_output_1, external_log])
+    external_route(cmd, external_log)
     if all(os.path.isfile(i) for i in unmapped_reads_files_list):
         file_append('\t'.join(j for j in [sample_name] + unmapped_reads_files_list) + '\n', outputDir + "Statistics/_non-mapped_reads_" + outputMask + '_' + currentTime + ".sampledata")
     else:
