@@ -121,7 +121,8 @@ def sort_bam(sam_file):
     external_input = outputDir + "Mapped_reads/" + sample_name + ".bam"
     external_output = outputDir + "Mapped_reads/" + sample_name + ".sorted.bam"
     external_log = outputDir + "Statistics/" + sample_name + "_sort_bam.log"
-    make_cleanup([external_output, external_log])
+    make_cleanup([external_output, external_output + ".bai", external_log])
+    subprocess.getoutput("ls -d " + outputDir + "Mapped_reads/" + sample_name + "*.bam | xargs rm -f")
     external_route(['samtools', 'sort', external_input, '-o', external_output], external_log)
     logging.info("Successfully sorted: " + external_input)
 
@@ -224,9 +225,13 @@ def reference2statistics(sam_file):
     sample_name = filename_only(sam_file)
     output_coverage_file = outputDir + "Statistics/" + sample_name + "_coverage.txt"
     make_cleanup([output_coverage_file])
+    pos_bp_file_name = outputDir + "Statistics/" + sample_name + "_pos_bp.txt"
+    if len(file_to_list(pos_bp_file_name)) == 0:
+        logging.critical("Failed to process: " + output_coverage_file)
+        return
     sample_total_reads, sample_mapped_reads, sample_total_bp, sample_mapped_bp = [int(var) for var in sam2stats(sam_file)]
     reference_df = pd.read_table(referenceGenomeLengths, header='infer', sep='\t', names=['reference_id', 'id_bp'])
-    stacked_coverages_df = pd.read_table(outputDir + "Statistics/" + sample_name + "_pos_bp.txt", sep='\t', header='infer', names=["reference_id", "id_maximal_coverage_depth", "id_coverage_breadth", "id_bp", "id_coverage_breadth_to_id_bp", "id_mapped_bp"])
+    stacked_coverages_df = pd.read_table(pos_bp_file_name, sep='\t', header='infer', names=["reference_id", "id_maximal_coverage_depth", "id_coverage_breadth", "id_bp", "id_coverage_breadth_to_id_bp", "id_mapped_bp"])
     genomes_coverages_df = pd.merge(reference_df, stacked_coverages_df.loc[:, [column for column in list(stacked_coverages_df) if column != "id_bp"]], on="reference_id", how='outer')
     genomes_coverages_df = genomes_coverages_df.loc[genomes_coverages_df['reference_id'] != 'genome']
     genomes_coverages_df["id_total_relative_abundance"] = genomes_coverages_df.loc[:, "id_mapped_bp"] / (genomes_coverages_df.loc[:, "id_bp"] * sample_total_bp)
