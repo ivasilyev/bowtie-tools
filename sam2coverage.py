@@ -122,7 +122,8 @@ def sort_bam(sam_file):
     external_output = outputDir + "Mapped_reads/" + sample_name + ".sorted.bam"
     external_log = outputDir + "Statistics/" + sample_name + "_sort_bam.log"
     make_cleanup([external_output, external_output + ".bai", external_log])
-    subprocess.getoutput("ls -d " + outputDir + "Mapped_reads/" + sample_name + "*.bam | xargs rm -f")
+    tmp = subprocess.getoutput("ls -d " + outputDir + "Mapped_reads/" + sample_name + "*.bam | xargs rm -f")
+    del tmp
     external_route(['samtools', 'sort', external_input, '-o', external_output], external_log)
     logging.info("Successfully sorted: " + external_input)
 

@@ -14,8 +14,10 @@ def parse_args():
     starting_parser = argparse.ArgumentParser(description="This tool automatically fixes, cuts and indexes DNA sequences in FASTA format. \nRequired software: bowtie, bowtie2, samtools")
     starting_parser.add_argument("-i", "--input", required=True,
                                  help="Reference DNA sequence file in FASTA format")
+    starting_parser.add_argument("-c", "--correct_headers", default=False, action="store_true",
+                                 help="(Optional) Enables headers correction instead of the default headers counter")
     starting_parser.add_argument("-p", "--preserve_headers", default=False, action="store_true",
-                                 help="(Optional) Disables the headers correction")
+                                 help="(Optional) Do not modify headers")
     starting_parser.add_argument("-n", "--not_large_index", default=False, action="store_true",
                                  help="(Optional) Avoid usage of a 'large' index, enables sequence splitting")
     starting_parser.add_argument("-s", "--size", type=float, default=3.6,
@@ -45,7 +47,9 @@ def parse_namespace():
         if ' ' in path:
             print("The path must not contain spaces: " + path + "\n Exiting...")
             sys.exit(2)
-    return str(os.path.abspath(namespace.input)), namespace.preserve_headers, int(float(namespace.size) * 10 ** 9), int(namespace.threads), namespace.not_large_index, namespace.output
+    if namespace.preserve_headers is True:
+        print("Preserving headers")
+    return str(os.path.abspath(namespace.input)), namespace.correct_headers, namespace.preserve_headers, int(float(namespace.size) * 10 ** 9), int(namespace.threads), namespace.not_large_index, namespace.output
 
 
 def file_to_str(file):
@@ -56,14 +60,14 @@ def file_to_str(file):
 def file_append(string, file_to_append):
     file = open(file_to_append, "a+")
     file.write(string)
-    string = None
+    del string
     file.close()
 
 
 def var_to_file(var_to_write, file_to_write):
     file = open(file_to_write, 'w')
     file.write(var_to_write)
-    var_to_write = None
+    del var_to_write
     file.close()
 
 
@@ -109,34 +113,48 @@ def external_route(input_direction, output_direction):
 def process_header(input_header):
     if preserveHeadersBool:
         return input_header
-    return '>' + re.sub('_+', '_', re.sub('\W+', '_', input_header)).strip('_') + '\n'
+    elif correctHeadersBool:
+        return '>' + re.sub('_+', '_', re.sub('\W+', '_', input_header)).strip('_') + '\n'
 
 
 def fasta_headers_fix(sequence_file):
     print("Parsing the whole sequence...")
     file_parsed = open(sequence_file, 'rU')
     output_file = outputDir + filename_only(sequence_file) + ".fasta"
-    output_buffer = ""
-    fixed_headers_dict = {}
+    headers_number_string = subprocess.getoutput("grep -c \> " + sequence_file)
+    headers_zfill_number = len(headers_number_string)
+    # raise ValueError("Cannot count sequences number:", sequence_file)
     try:
+        output_buffer = ""
+        fixed_headers_dict = {}
+        headers_counter = 0
         for string in file_parsed:
             if string.startswith('>'):
+                headers_counter += 1
                 processed_string = process_header(string)
+                if not processed_string:
+                    processed_string = ">ID" + str(headers_counter).zfill(headers_zfill_number) + "\n"
                 fixed_headers_dict[re.sub('[\n>]', '', processed_string)] = re.sub('[\n>]', '', string).replace('\t', ' ')
                 string = processed_string
             output_buffer += string
         var_to_file(output_buffer, output_file)
+        del output_buffer
     except MemoryError:
         print("Not enough memory! Using the per-line processing...")
+        fixed_headers_dict = {}
+        headers_counter = 0
         for string in file_parsed:
             if string.startswith('>'):
+                headers_counter += 1
                 processed_string = process_header(string)
+                if not processed_string:
+                    processed_string = ">ID" + str(headers_counter).zfill(headers_zfill_number) + "\n"
                 fixed_headers_dict[re.sub('[\n>]', '', processed_string)] = re.sub('[\n>]', '', string).replace('\t', ' ')
                 string = processed_string
             file_append(string, output_file)
     file_parsed.close()
-    print("Completed FASTA headers fixing for " + sequence_file + ". " + str(len(fixed_headers_dict)) + " headers were processed!")
-    output_buffer, file_parsed = (None,) * 2
+    print("Completed FASTA headers fixing for " + sequence_file + ". \n" + str(len(fixed_headers_dict)) + " of " + headers_number_string + " headers were processed!")
+    del file_parsed
     return fixed_headers_dict
 
 
@@ -149,7 +167,6 @@ def sequence_chop(sequence_file, input_chunk_size):
     sequence_buffer = open(sequence_file, 'rU')
     sequences_number = sum(1 for sequence_buffer_line in sequence_buffer)
     sequence_buffer.close()
-    sequence_buffer_line, sequence_buffer = (None,) * 2
     sequence_buffer = open(sequence_file, 'rU')
     chunks_files_list = []
     chunk_buffer = ""
@@ -168,7 +185,7 @@ def sequence_chop(sequence_file, input_chunk_size):
                 chunk_index += 1
             chunk_buffer += single_sequence
             single_sequence = ""
-    single_sequence, chunk_buffer = (None,) * 2
+    del single_sequence, chunk_buffer
     print(str(len(chunks_files_list)) + " chunks were created!")
     return chunks_files_list
 
@@ -220,7 +237,7 @@ def fai2genome(chunk):
     if not os.path.isfile(output_annotation_file):
         var_to_file("Reference_ID\tReference_Length\n", output_annotation_file)
     file_append(output, output_annotation_file)
-    strings, strings_processed, output = (None,) * 3
+    del strings, strings_processed, output
     print("Compiled compact annotation for " + chunk)
 
 
@@ -250,7 +267,7 @@ def add_former_headers(headers_dict, annotation_file):
     annotation_file_output_buffer = open(annotation_file, 'w')
     annotation_file_output_buffer.write(annotation_file_output)
     annotation_file_output_buffer.close()
-    annotation_file, annotation_file_output, annotation_file_buffer, annotation_file_output_buffer = (None,) * 4
+    del annotation_file, annotation_file_output, annotation_file_buffer, annotation_file_output_buffer
     print("Added former headers to annotation file!")
 
 
@@ -279,7 +296,7 @@ def sequence2chunks_list(sequence_file):
 
 
 if __name__ == "__main__":
-    inputFile, preserveHeadersBool, chunkSize, threadsNumber, notLargeIndexes, outputDir = parse_namespace()
+    inputFile, correctHeadersBool, preserveHeadersBool, chunkSize, threadsNumber, notLargeIndexes, outputDir = parse_namespace()
     fixedHeadersDict = fasta_headers_fix(inputFile)
     fixedHeadersDict["Reference_ID"] = "Former_ID"
     chunks = sequence2chunks_list(outputDir + filename_only(inputFile) + ".fasta")
