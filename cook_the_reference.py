@@ -235,7 +235,7 @@ def fai2genome(chunk):
     print("Created genome index for " + chunk)
     output_annotation_file = outputDir + filename_only(inputFile) + "_annotation.txt"
     if not os.path.isfile(output_annotation_file):
-        var_to_file("Reference_ID\tReference_Length\n", output_annotation_file)
+        var_to_file("reference_id\tid_bp\n", output_annotation_file)
     file_append(output, output_annotation_file)
     del strings, strings_processed, output
     print("Compiled compact annotation for " + chunk)
@@ -298,7 +298,7 @@ def sequence2chunks_list(sequence_file):
 if __name__ == "__main__":
     inputFile, correctHeadersBool, preserveHeadersBool, chunkSize, threadsNumber, notLargeIndexes, outputDir = parse_namespace()
     fixedHeadersDict = fasta_headers_fix(inputFile)
-    fixedHeadersDict["Reference_ID"] = "Former_ID"
+    fixedHeadersDict["reference_id"] = "former_id"
     chunks = sequence2chunks_list(outputDir + filename_only(inputFile) + ".fasta")
     multi_core_queue(asynchronous_chunk_processing)
     add_former_headers(fixedHeadersDict, outputDir + filename_only(inputFile) + "_annotation.txt")
