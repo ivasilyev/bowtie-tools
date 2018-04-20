@@ -113,4 +113,5 @@ if __name__ == '__main__':
     outputSampleDataFileName = outputDir + timeString + ".sampledata"
     list_based_dict_export(toDoDF["sample_name"].values.tolist(), {i.split('\t')[0].strip(): i.split('\t')[1:] for i in inputSampleDataRowsList if len(i.split('\t')[0].strip()) > 0}, outputSampleDataFileName)
     if debuggingBool:
-        verifiedSamplesDataFrame.to_csv(outputDir + timeString + "_debug.txt", sep='\t', index=False)
+        verifiedSamplesDataFrame.to_csv(outputDir + timeString + "_debug.tsv", sep='\t', index=False)
+    print("Done. \nFiles to process: {} \nDumped file list: {}".format(len(toDoDF), outputSampleDataFileName))

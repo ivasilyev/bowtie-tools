@@ -261,7 +261,7 @@ if __name__ == "__main__":
     if referenceFai and referenceGenomeLengths and not noCoverageExtractionBool:
         if os.path.isfile(scriptDir + "sam2coverage.py"):
             logging.info("Starting coverage extract...")
-            multi_core_queue(coverage_extract, inputSampleDataList)
+            single_core_queue(coverage_extract, inputSampleDataList)
         else:
             logging.fatal("Input parameters were specified but the coverage extractor script has not been found!")
             logging.fatal("Please put 'sam2coverage.py' into the directory: " + scriptDir)

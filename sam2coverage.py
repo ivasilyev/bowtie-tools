@@ -35,13 +35,6 @@ def parse_args():
     return starting_parser.parse_args()
 
 
-def is_path_exists(path):
-    try:
-        os.makedirs(path)
-    except OSError as exception:
-        print(exception)
-
-
 def ends_with_slash(string):
     if string.endswith("/"):
         return string
@@ -54,17 +47,11 @@ def parse_namespace():
     if (not namespace.input.endswith(".sam")) and (not namespace.input.endswith(".bam")):
         print("Wrong file extension! Supported formats: SAM, BAM")
         sys.exit(2)
-    namespace.output = create_dirs([namespace.output, namespace.output + "/Statistics", namespace.output + "/Mapped_reads"])[0]
+    namespace.output = ends_with_slash(namespace.output)
+    [os.makedirs(namespace.output + i, exist_ok=True) for i in ["Mapped_reads", "Statistics"]]
     if not namespace.log:
         namespace.log = namespace.output + "Statistics/" + filename_only(namespace.input) + "_sam2coverage.log"
     return namespace.input, namespace.fai, namespace.genome, namespace.annotation, namespace.threshold, namespace.non_zero, namespace.log, namespace.buffer, namespace.output
-
-
-def create_dirs(paths_list):
-    paths_list_with_slashes = [ends_with_slash(path_with_slash) for path_with_slash in paths_list]
-    for path4check in paths_list_with_slashes:
-        is_path_exists(path4check)
-    return paths_list_with_slashes
 
 
 def external_route(input_direction_list, output_direction):
@@ -112,21 +99,14 @@ def sam2bam(sam_file):
     external_output = outputDir + "Mapped_reads/" + sample_name + ".bam"
     external_log = outputDir + "Statistics/" + sample_name + "_sam2bam.log"
     make_cleanup([external_output, external_log])
-    external_route(['samtools', 'import', referenceFai, external_input, external_output], external_log)
+    tmp = subprocess.getoutput("samtools view -Su {} -@ 32 | \
+                                samtools sort - -o {} -@ 32".format(external_input, "{}Mapped_reads/{}.sorted.bam".format(outputDir, sample_name)))
+    del tmp
     logging.info("Successfully converted: " + external_output)
 
 
 def sort_bam(sam_file):
-    sample_name = filename_only(sam_file)
-    external_input = outputDir + "Mapped_reads/" + sample_name + ".bam"
-    external_output = outputDir + "Mapped_reads/" + sample_name + ".sorted.bam"
-    external_log = outputDir + "Statistics/" + sample_name + "_sort_bam.log"
-    make_cleanup([external_output, external_output + ".bai", external_log])
-    tmp = subprocess.getoutput("ls -d " + outputDir + "Mapped_reads/" + sample_name + "*.bam | xargs rm -f")
-    del tmp
-    external_route(['samtools', 'sort', external_input, '-o', external_output], external_log)
-    logging.info("Successfully sorted: " + external_input)
-
+    pass
 
 def bam2coverage(sam_file):
     sample_name = filename_only(sam_file)
@@ -174,7 +154,7 @@ def bam_index(sam_file):
     external_input = outputDir + "Mapped_reads/" + sample_name + ".sorted.bam"
     external_log = outputDir + "Statistics/" + sample_name + "_index_bam.log"
     make_cleanup([external_log])
-    external_route(['samtools', 'index', external_input], external_log)
+    external_route(['samtools', 'index', external_input, "-@", "32"], external_log)
     logging.info("Successfully indexed: " + external_input)
 
 
@@ -183,7 +163,7 @@ def bam2idxstats(sam_file):
     external_input = outputDir + "Mapped_reads/" + sample_name + ".sorted.bam"
     external_output = outputDir + "Statistics/" + sample_name + "_idxstats.txt"
     make_cleanup([external_output])
-    external_route(['samtools', 'idxstats', external_input], external_output)
+    external_route(['samtools', 'idxstats', external_input, "-@", "32"], external_output)
     logging.info("Successfully retrieved mapped reads number: " + external_input)
 
 
