@@ -193,8 +193,11 @@ def bowtie_it(single_sampledata):
             logging.warning("Failed to parse paired reads! The sampledata must contain exactly 3 columns!")
             return
         elif len(paired_reads_list) == 1:
+            if any(reads_file_extension == ".{}".format(i) for i in ["fasta", "fa", "fna"]):
+                cmd.extend(['-x', bwt_index, "-f", reads_file_path, '--threads', cpuThreadsString, '-S', external_output_0])
+            else:
+                cmd.extend(['-x', bwt_index, reads_file_path, '--threads', cpuThreadsString, '-S', external_output_0])
             logging.info("Mapping single reads with bowtie2")
-            cmd.extend(['-x', bwt_index, reads_file_path, '--threads', cpuThreadsString, '-S', external_output_0])
         else:
             logging.info("Mapping mate-pair reads with bowtie2")
             cmd.extend(['-x', bwt_index, '-1', paired_reads_list[0], '-2', paired_reads_list[1], '--threads', cpuThreadsString, '-S', external_output_0])
