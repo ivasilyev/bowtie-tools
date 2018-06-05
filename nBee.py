@@ -121,8 +121,8 @@ class Utilities:
         return [func(i) for i in queue]
     @staticmethod
     def multi_core_queue(func, queue):
-        pool = multiprocessing.Pool()
-        output = pool.map(func, queue)
+        pool = multiprocessing.Pool(processes=mainInitializer.threads_number)
+        output = pool.map_async(func, queue)
         pool.close()
         pool.join()
         return output
