@@ -8,6 +8,8 @@ import argparse
 import threading
 import multiprocessing
 import subprocess
+import json
+from nBee import RefDataParser
 
 
 def parse_args():
@@ -121,7 +123,7 @@ def fasta_headers_fix(sequence_file):
     print("Parsing the whole sequence...")
     file_parsed = open(sequence_file, 'rU')
     output_file = outputDir + filename_only(sequence_file) + ".fasta"
-    headers_number_string = subprocess.getoutput("grep -c \> " + sequence_file)
+    headers_number_string = subprocess.getoutput("grep -c ^\> {}".format(sequence_file)).strip()
     headers_zfill_number = len(headers_number_string)
     # raise ValueError("Cannot count sequences number:", sequence_file)
     try:
@@ -165,7 +167,7 @@ def sequence_chop(sequence_file, input_chunk_size):
         input_chunk_size = default_max_chunk_size
     print("Using the maximal chunk size: " + str(input_chunk_size))
     sequence_buffer = open(sequence_file, 'rU')
-    sequences_number = sum(1 for sequence_buffer_line in sequence_buffer)
+    sequences_number = sum(1 for i in sequence_buffer)
     sequence_buffer.close()
     sequence_buffer = open(sequence_file, 'rU')
     chunks_files_list = []
@@ -233,7 +235,7 @@ def fai2genome(chunk):
     output = "".join(str(i) for i in strings_processed if len(i) > 0)
     file_append(output, outputDir + filename_only(chunk) + "_samtools.genome")
     print("Created genome index for " + chunk)
-    output_annotation_file = outputDir + filename_only(inputFile) + "_annotation.txt"
+    output_annotation_file = outputDir + filename_only(inputFile) + "_annotation.tsv"
     if not os.path.isfile(output_annotation_file):
         var_to_file("reference_id\tid_bp\n", output_annotation_file)
     file_append(output, output_annotation_file)
@@ -272,18 +274,20 @@ def add_former_headers(headers_dict, annotation_file):
 
 
 def make_refdata(chunks_list):
-    chunks_iteration = 0
+    chunks_counter = 1
+    output_string = ""
+    output_dict = {}
+    chunk_dict_keys_list = RefDataParser.get_refdata_keys_list()
+    
     for chunk in chunks_list:
-        if chunks_iteration == 0:
-            var_to_file("", outputDir + filename_only(inputFile) + ".refdata")
-        file_append(str(chunk) + '\t' +
-                    outputDir + filename_only(chunk) + "_colorspace" + '\t' +
-                    outputDir + filename_only(chunk) + "_bowtie2" + '\t' +
-                    outputDir + filename_only(chunk) + "_samtools.fai" + '\t' +
-                    outputDir + filename_only(chunk) + "_samtools.genome" + '\t' +
-                    outputDir + filename_only(inputFile) + "_annotation.txt" + '\n',
-                    outputDir + filename_only(inputFile) + ".refdata")
-        chunks_iteration += 1
+        linker_list = [i.format(c=str(chunk), o=outputDir, fc=filename_only(chunk), fi=filename_only(inputFile)) for i in ["{c}", "{o}{fc}_colorspace", "{o}{fc}_bowtie2", "{o}{fc}_samtools.fai", "{o}{fc}_samtools.genome", "{o}{fi}_annotation.tsv"]]
+        s = "{}\n".format("\t".join(linker_list))
+        output_string += s
+        d = {k: v for k, v in zip(chunk_dict_keys_list, linker_list)}
+        output_dict["sequence_{}".format(chunks_counter)] = d
+        chunks_counter += 1
+    var_to_file(var_to_write=output_string, file_to_write="{o}{fi}.refdata".format(o=outputDir, fi=filename_only(inputFile)))
+    var_to_file(var_to_write=json.dumps(output_dict, sort_keys=False, indent=4), file_to_write="{o}{fi}.json".format(o=outputDir, fi=filename_only(inputFile)))
 
 
 def sequence2chunks_list(sequence_file):
@@ -301,6 +305,6 @@ if __name__ == "__main__":
     fixedHeadersDict["reference_id"] = "former_id"
     chunks = sequence2chunks_list(outputDir + filename_only(inputFile) + ".fasta")
     multi_core_queue(asynchronous_chunk_processing)
-    add_former_headers(fixedHeadersDict, outputDir + filename_only(inputFile) + "_annotation.txt")
+    add_former_headers(fixedHeadersDict, outputDir + filename_only(inputFile) + "_annotation.tsv")
     make_refdata(chunks)
     print("Created refdata linker: " + outputDir + filename_only(inputFile) + ".refdata\n\nReference indexing has been completed.")
