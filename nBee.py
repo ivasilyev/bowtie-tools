@@ -10,7 +10,7 @@ tail -n 5 /data1/bio/projects/dsafina/hp_checkpoints/srr_hp_checkpoints.sampleda
 
 
 docker pull ivasilyev/bwt_filtering_pipeline_worker:latest && \
-docker run --rm -v /data:/data -v /data1:/data1 -v /data2:/data2 -it ivasilyev/bwt_filtering_pipeline_worker bash
+docker run --rm -v /data:/data -it ivasilyev/bwt_filtering_pipeline_worker bash
 
 cd /data2/bio/sandbox/nbee2
 python3 /data2/bio/sandbox/nbee2/nBee2.py -i /data2/bio/sandbox/nbee2/test.sampledata -r /data/reference/TADB/index/tadb_v2.0.refdata -m test -o /data2/bio/sandbox/nbee2/test
@@ -398,12 +398,12 @@ class CoverageExtractor:
         print("Sorted SAM file: '{}'".format(self._pk.samtools_sorted_file_name))
     def _index_bam(self):
         Utilities.batch_remove(self._pk.samtools_index_file_name, self._pk.samtools_index_log_file_name)
-        s = subprocess.getoutput("samtools index {} -@ 1")
+        s = subprocess.getoutput("samtools index {}".format(self._pk.samtools_sorted_file_name))
         Utilities.dump_string(string=s, file=self._pk.samtools_index_file_name)
         print("Indexed BAM file: '{}'".format(self._pk.samtools_index_file_name))
     def _bam2idxstats(self):
         Utilities.batch_remove(self._pk.samtools_idxstats_file_name)
-        s = subprocess.getoutput("samtools idxstats {} -@ 1".format(self._pk.samtools_sorted_file_name))
+        s = subprocess.getoutput("samtools idxstats {}".format(self._pk.samtools_sorted_file_name))
         Utilities.dump_string(string=s, file=self._pk.samtools_idxstats_file_name)
         print("Mapped reads statistics: '{}'".format(self._pk.samtools_idxstats_file_name))
     def _bam2stats(self):
