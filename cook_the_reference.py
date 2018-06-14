@@ -287,7 +287,7 @@ def make_refdata(chunks_list):
         output_dict["sequence_{}".format(chunks_counter)] = d
         chunks_counter += 1
     var_to_file(var_to_write=output_string, file_to_write="{o}{fi}.refdata".format(o=outputDir, fi=filename_only(inputFile)))
-    var_to_file(var_to_write=json.dumps(output_dict, sort_keys=False, indent=4), file_to_write="{o}{fi}.json".format(o=outputDir, fi=filename_only(inputFile)))
+    var_to_file(var_to_write="{}\n".format(json.dumps(output_dict, sort_keys=False, indent=4)), file_to_write="{o}{fi}.json".format(o=outputDir, fi=filename_only(inputFile)))
 
 
 def sequence2chunks_list(sequence_file):
