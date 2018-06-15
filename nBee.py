@@ -2,19 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-cd /data2/bio/sandbox/nbee2
-sudo chmod -R 777 /data2/bio/sandbox/nbee2
-
-head -n 5 /data1/bio/projects/dsafina/hp_checkpoints/srr_hp_checkpoints.sampledata > /data2/bio/sandbox/nbee2/test.sampledata
-tail -n 5 /data1/bio/projects/dsafina/hp_checkpoints/srr_hp_checkpoints.sampledata >> /data2/bio/sandbox/nbee2/test.sampledata
-
-
-docker pull ivasilyev/bwt_filtering_pipeline_worker:latest && \
 docker run --rm -v /data:/data -it ivasilyev/bwt_filtering_pipeline_worker bash
-
-cd /data2/bio/sandbox/nbee2
-python3 /data2/bio/sandbox/nbee2/nBee2.py -i /data2/bio/sandbox/nbee2/test.sampledata -r /data/reference/TADB/index/tadb_v2.0.refdata -m test -o /data2/bio/sandbox/nbee2/test
-
 """
 
 import argparse
@@ -399,7 +387,7 @@ class CoverageExtractor:
     def _index_bam(self):
         Utilities.batch_remove(self._pk.samtools_index_file_name, self._pk.samtools_index_log_file_name)
         s = subprocess.getoutput("samtools index {}".format(self._pk.samtools_sorted_file_name))
-        Utilities.dump_string(string=s, file=self._pk.samtools_index_file_name)
+        Utilities.dump_string(string=s, file=self._pk.samtools_index_log_file_name)
         print("Indexed BAM file: '{}'".format(self._pk.samtools_index_file_name))
     def _bam2idxstats(self):
         Utilities.batch_remove(self._pk.samtools_idxstats_file_name)
