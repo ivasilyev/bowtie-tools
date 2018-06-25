@@ -16,16 +16,14 @@ docker run --rm -v /data:/data -v /data1:/data1 -v /data2:/data2 -it ivasilyev/b
 """
 
 import argparse
-import pandas as pd
 import re
 import os
-import subprocess
 from nBee import CoverageExtractor, Utilities, RefDataParser, RefDataLine
 
 
 class Initializer:
     def __init__(self):
-        self._namespace = self.parse_args()
+        self._namespace = self._parse_args()
         # Aligner class parameters mirroring
         self.mapped_file_name = self._namespace.input
         self.refdata_file_name = self._namespace.refdata
@@ -35,9 +33,9 @@ class Initializer:
         self._output_directory = Utilities.ends_with_slash("/".join(os.path.dirname(os.path.abspath(self.mapped_file_name)).split("/")[:-1]))
         self.logs_directory = "{}Logs/".format(self._output_directory)
         self.statistics_directory = "{}Statistics/".format(self._output_directory)
-        self.create_dirs()
+        self._create_dirs()
     @staticmethod
-    def parse_args():
+    def _parse_args():
         starting_parser = argparse.ArgumentParser(description="""
         This script performs coverage extraction from SAM or BAM (faster) file
         Required software: bowtie, bowtie2, samtools, bedtools
@@ -51,14 +49,14 @@ class Initializer:
         starting_parser.add_argument("-n", "--non_zero", action='store_true', default=False,
                                      help="(Optional) If specified, only genomes with non-zero coverage will be reported")
         return starting_parser.parse_args()
-    def create_dirs(self):
+    def _create_dirs(self):
         tmp = [os.makedirs(i, exist_ok=True) for i in [self.logs_directory, self.statistics_directory]]
         del tmp
 
 
 class PathsKeeper:
     def __init__(self):
-        self._refdata = refDataParser.get_parsed_list()[mainInitializer.chunk_number]
+        self._refdata = refDataParser.get_refdata_line_by_index(mainInitializer.chunk_number)
         self.samtools_index_file = self._refdata.samtools_index_file
         self.bedtools_genome_file = self._refdata.bedtools_genome_file
         self.annotation_file = self._refdata.annotation_file
@@ -89,7 +87,7 @@ class PathsKeeper:
 
 if __name__ == '__main__':
     mainInitializer = Initializer()
-    refDataParser = RefDataParser()
+    refDataParser = RefDataParser(mainInitializer.refdata_file_name)
     pathsKeeper = PathsKeeper()
     extractor = CoverageExtractor(pathsKeeper)
     extractor.run()
