@@ -89,7 +89,7 @@ class RefDataArray:
             if not nfasta_file:
                 continue
             indexing_dict = RefDataLine.fill_dict(nfasta_file)
-            indexing_dict["annotation"] = annotation_dict["annotation"]
+            indexing_dict.update(annotation_dict)
             print("Processing nFASTA: '{}'".format(nfasta_file))
             refdata = RefDataLine(indexing_dict)
             refdata.index()

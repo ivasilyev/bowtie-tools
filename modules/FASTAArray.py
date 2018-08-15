@@ -12,11 +12,12 @@ class FASTAArray(object):
     """
     This class keeps FASTALine objects list
     """
-    _annotations_2d_array = []
-
     def __init__(self, parsed_fastas_list: list):
         self._parsed_fastas_list = Utilities.remove_empty_values(parsed_fastas_list)
         self._parsed_fastas_list.sort(key=len, reverse=True)
+        self._annotations_2d_array = [["reference_id", "id_bp"]]
+        for fasta in self._parsed_fastas_list:
+            self._annotations_2d_array.append([fasta.header, str(len(fasta))])
 
     def __len__(self):
         return sum([len(i) for i in self._parsed_fastas_list])
@@ -67,7 +68,7 @@ class FASTAArray(object):
 
     @staticmethod
     def __process_header(header: str):
-        return '>' + re.sub('_+', '_', re.sub('\W+', '_', header)).strip('_') + '\n'
+        return re.sub('_+', '_', re.sub('\W+', '_', header)).strip('_') + '\n'
 
     def _fix_headers(self):
         headers_zfill_number = len(str(len(self._parsed_fastas_list)))
@@ -78,7 +79,7 @@ class FASTAArray(object):
         for fasta in self._parsed_fastas_list:
             headers_counter += 1
             old_header = fasta.header
-            fasta.set_header(">ID" + str(headers_counter).zfill(headers_zfill_number))
+            fasta.set_header("ID" + str(headers_counter).zfill(headers_zfill_number))
             fixed_fastas_list.append(fasta)
             annotations_2d_array.append([fasta.header, old_header, str(len(fasta))])
         print("{} headers have been processed".format(headers_counter))
@@ -87,9 +88,10 @@ class FASTAArray(object):
 
     @staticmethod
     def parse(string: str):
+        from modules.Utilities import Utilities
         string = re.sub("[\r\n]+", "\n", string)
-        raw_fastas_list = [">{}".format(j) for j in [i.strip() for i in string.split("\n>")] if len(j) > 0]
-        return FASTAArray([FASTALine(i) for i in raw_fastas_list])
+        q = [">{}".format(j) for j in Utilities.remove_empty_values([i.strip() for i in re.split("^>", string)])]
+        return FASTAArray(Utilities.multi_core_queue(func=FASTALine, queue=q))
 
     @staticmethod
     def prepare_nfasta_for_indexing(input_file: str, output_dir: str, preserve_headers: bool = False, chop: bool = False, chunk_length: int = int(3.6 * 10 ** 9)):

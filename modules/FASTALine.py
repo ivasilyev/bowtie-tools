@@ -13,8 +13,9 @@ class FASTALine:
     def __init__(self, single_fasta: str):
         self._body = re.sub("[\r\n]+", "\n", single_fasta).strip()
         if self._body.startswith(">"):
-            self.header = re.sub("^>", "", self._body.split("\n")[0]).strip()
-            self.sequence = re.sub("[^A-Za-z]", "", "".join(self._body.split("\n")[1:])).upper()
+            self.header = re.sub("^>", "", self._body.split("\n")[0].strip())
+            self.sequence = "".join([i.strip() for i in self._body.split("\n")[1:]]).upper()
+            self.sequence = re.sub("[^A-Za-z]", "", self.sequence)
             self._export_sequence = "\n".join(self.slice_str_by_len(self.sequence, 70))
             # Nucleotide sequence has only AT(U)GC letters. However, it may be also protein FASTA.
         else:
@@ -30,7 +31,7 @@ class FASTALine:
         return len(self.sequence)
 
     def get_total_length(self):
-        return len(">" + self.header) + len(self._export_sequence)
+        return len(self.to_str())
 
     def to_dict(self):
         return {self.header: self._export_sequence}
