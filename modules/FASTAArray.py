@@ -88,9 +88,8 @@ class FASTAArray(object):
 
     @staticmethod
     def parse(string: str):
-        from modules.Utilities import Utilities
-        string = re.sub("[\r\n]+", "\n", string)
-        q = [">{}".format(j) for j in Utilities.remove_empty_values([i.strip() for i in re.split("^>", string)])]
+        string = "\n" + re.sub("[\r\n]+", "\n", string).strip()
+        q = [">{}".format(j) for j in Utilities.remove_empty_values([i.strip() for i in string.split("\n>")])]
         return FASTAArray([FASTALine(i) for i in q])
 
     @staticmethod
@@ -105,9 +104,9 @@ class FASTAArray(object):
         array.dump_annotation(annotation_file)
         arrays_dict = {"{}.fasta".format(output_file_mask): array}
         if chop and array.get_total_length() >= chunk_length:
-            print("Too large reference nFASTA: '{}'. Splitting sequences".format(input_file))
+            print("Too large reference nFASTA file: '{}'. Splitting sequences".format(input_file))
             arrays_dict = array._chop_sequences(chunk_length)
-            arrays_dict = {"{a}{i}.fasta".format(a=output_file_mask, i=i): arrays_dict[i] for i in arrays_dict}
+            arrays_dict = {"{a}_{i}.fasta".format(a=output_file_mask, i=i): arrays_dict[i] for i in arrays_dict}
         refdatas_dict = {}
         counter = 0
         for chunk_file in arrays_dict:

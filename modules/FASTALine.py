@@ -16,7 +16,7 @@ class FASTALine:
             self.header = re.sub("^>", "", self._body.split("\n")[0].strip())
             self.sequence = "".join([i.strip() for i in self._body.split("\n")[1:]]).upper()
             self.sequence = re.sub("[^A-Za-z]", "", self.sequence)
-            self._export_sequence = "\n".join(self.slice_str_by_len(self.sequence, 70))
+            self._export_sequence = "\n".join(self._slice_str_by_len(self.sequence, 70))
             # Nucleotide sequence has only AT(U)GC letters. However, it may be also protein FASTA.
         else:
             print("Cannot parse the header for sequence: '{}'".format(self._body))
@@ -24,7 +24,7 @@ class FASTALine:
             self.sequence = ""
 
     @staticmethod
-    def slice_str_by_len(string: str, length: int):
+    def _slice_str_by_len(string: str, length: int):
         return [string[0 + i:length + i] for i in range(0, len(string), length)]
 
     def __len__(self) -> int:
@@ -37,7 +37,7 @@ class FASTALine:
         return {self.header: self._export_sequence}
 
     def to_str(self):
-        return "\n".join([">" + self.header, self._export_sequence])
+        return ">{a}\n{b}".format(a=self.header, b=self._export_sequence)
 
     def set_header(self, header):
         if header:
