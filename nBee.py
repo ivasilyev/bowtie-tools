@@ -1,38 +1,32 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""
-docker run --rm -v /data:/data -it ivasilyev/bwt_filtering_pipeline_worker bash
-"""
-
 import argparse
 import logging
-import re
-import os
-import multiprocessing
 import subprocess
-import pandas as pd
-from datetime import datetime
+
+
+from modules.Utilities import Utilities
+from modules.SampleDataParser import SampleDataParser
+from modules.RefDataArray import RefDataArray
+from modules.RefDataLine import RefDataLine
+from modules.PathsKeeper import PathsKeeper
+from modules.Aligner import Aligner
+from modules.CoverageExtractor import CoverageExtractor
 
 
 class Initializer:
     def __init__(self):
-        self._namespace = self._parse_args()
-        self.sampledata_file_name = self._namespace.input
-        self.refdata_file_name = self._namespace.refdata
-        self.input_mask = self._namespace.mask
+        namespace = self._parse_args()
+        self.sampledata_file_name = namespace.input
+        self.refdata_file_name = namespace.refdata
+        self.input_mask = namespace.mask
         # *_output_mask are attributes of RefDataLine class
-        self.threads_number = self._parse_threads_number(self._namespace.threads)
-        self.no_coverage_bool = self._namespace.no_coverage
-        self._output_directory = Utilities.ends_with_slash(self._namespace.output)
-        self.mapped_reads_directory = "{}Mapped_reads/".format(self._output_directory)
-        self.unmapped_reads_directory = "{}Unmapped_reads/".format(self._output_directory)
-        self.logs_directory = "{}Logs/".format(self._output_directory)
-        self.statistics_directory = "{}Statistics/".format(self._output_directory)
-        self._create_dirs()
-        # reserved fields
-        self.non_zero_bool = False
-        self.mapped_file_name = ""
+        self.threads_number = self._parse_threads_number(namespace.threads)
+        self.no_coverage_bool = namespace.no_coverage
+        self.output_dir = Utilities.ends_with_slash(namespace.output)
+        self.logs_directory = "{}Logs/".format(self.output_dir)
+
     @staticmethod
     def _parse_args():
         starting_parser = argparse.ArgumentParser(description="""
@@ -52,6 +46,7 @@ class Initializer:
         starting_parser.add_argument("-o", "--output", required=True,
                                      help="Output directory")
         return starting_parser.parse_args()
+
     @staticmethod
     def _parse_threads_number(s):
         t = int(subprocess.getoutput("nproc").strip())
@@ -76,465 +71,40 @@ class Initializer:
             print("Cannot parse the threads number: '{s}'. Using threads number: '{t}'".format(s=s, t=t))
             o = t
         return o
-    def _create_dirs(self):
-        tmp = [os.makedirs(i, exist_ok=True) for i in [self._output_directory, self.unmapped_reads_directory, self.mapped_reads_directory, self.logs_directory, self.statistics_directory]]
-        del tmp
-
-
-class Utilities:
-    @staticmethod
-    def ends_with_slash(string):
-        return (string + "/", string)[string.endswith("/")]
-    @staticmethod
-    def remove_empty_values(input_list):
-        output_list = []
-        if input_list:
-            for i in input_list:
-                if i:
-                    try:
-                        if len(i) > 0:
-                            output_list.append(i)
-                    except TypeError:
-                        continue
-        return output_list
-    @staticmethod
-    def log_and_raise(message):
-        logging.critical(message)
-        raise ValueError(message)
-    @staticmethod
-    def filename_only(string):
-        return str(".".join(string.rsplit("/", 1)[-1].split(".")[:-1]))
-    @staticmethod
-    def dump_string(string, file):
-        with open(file=file, mode="w", encoding="utf-8") as f:
-            f.write(string)
-    @staticmethod
-    def get_time():
-        now = datetime.now()
-        output_list = []
-        for time_unit in [now.year, now.month, now.day, now.hour, now.minute, now.second]:
-            time_unit = str(time_unit)
-            if len(time_unit) < 2:
-                time_unit = '0' + time_unit
-            output_list.append(time_unit)
-        return '-'.join(output_list)
-    @staticmethod
-    def batch_remove(*args):
-        lst = [i for i in args if os.path.isfile(i) or os.path.isdir(i)]
-        if "/" not in lst:  # I know it is useless
-            s = " ".join(lst)
-            subprocess.getoutput("rm -rf {}".format(s))
-            print("Removed items: {}".format(s))
-    @staticmethod
-    def single_core_queue(func, queue):
-        return [func(i) for i in queue]
-    @staticmethod
-    def multi_core_queue(func, queue):
-        pool = multiprocessing.Pool(processes=mainInitializer.threads_number)
-        output = pool.map_async(func, queue)
-        pool.close()
-        pool.join()
-        return output
-    @staticmethod
-    def extracting_wrapper(func, args):
-        return func(args)
-
-
-class RefDataLine:
-    """
-    The class describes a single REFDATA dictionary
-    """
-    def __init__(self, parsed_dictionary):
-        self._output_mask = Utilities.filename_only(parsed_dictionary["reference_nfasta"])
-        self.mapped_output_mask = "_".join([mainInitializer.input_mask, self._output_mask])
-        self.unmapped_output_mask = "_".join([mainInitializer.input_mask, "no", self._output_mask])
-        self.bowtie_index_mask = parsed_dictionary["ebwt_mask"]
-        self.bowtie2_index_mask = parsed_dictionary["bt2_mask"]
-        self.samtools_index_file = parsed_dictionary["fai"]
-        self.bedtools_genome_file = parsed_dictionary["genome"]
-        self.annotation_file = parsed_dictionary["annotation"]
-
-
-class RefDataParser:
-    """
-    The class analyzes JSONs or REFDATA, tab-delimited text files containing paths to reference index files.
-    REFDATA format:
-    <Reference DNA fasta chunk 1> <Bowtie index mask> <Bowtie2 index mask> <SamTools index> <BedTools genome length> <Annotation file>
-    <Reference DNA fasta chunk 2> <Bowtie index mask> <Bowtie2 index mask> <SamTools index> <BedTools genome length> <Annotation file>
-    ...
-    JSON keys (corresponding to above):
-    {'sequence_1': {'reference_nfasta': '', 'ebwt_mask': '', 'bt2_mask': '', 'fai': '', 'genome': '', 'annotation': ''},
-    'sequence_2': {'reference_nfasta': '', 'ebwt_mask': '', 'bt2_mask': '', 'fai': '', 'genome': '', 'annotation': ''},
-    ...}
-    """
-    def __init__(self, reference_data_file_name):
-        self._file_wrapper = open(reference_data_file_name, "r", encoding="utf-8")
-        self._refdata_keys_list = self.get_refdata_keys_list()
-        if reference_data_file_name.endswith(".json"):
-            self._body_dict = self._parse_json_refdata()
-        else:
-            self._body_dict = self._parse_table_refdata()
-        try:
-            self._verify_json_refdata(self._body_dict)
-        except ValueError:
-            Utilities.log_and_raise("Bad reference data file: {}".format(reference_data_file_name))
-    @staticmethod
-    def get_refdata_keys_list():
-        return ["reference_nfasta", "ebwt_mask", "bt2_mask", "fai", "genome", "annotation"]
-    def _parse_json_refdata(self):
-        import json
-        return json.load(self._file_wrapper)
-    def _parse_table_refdata(self):
-        d = {}
-        counter = 1
-        for line in self._file_wrapper:
-            if len(line.strip()):
-                d["sequence_{}".format(counter)] = {k: v for k, v in zip(self._refdata_keys_list, [i.strip() for i in line.split("\t")])}
-        return d
-    def _verify_json_refdata(self, d):
-        if len(d) == 0:
-            raise ValueError("Empty sample data!")
-        for k1 in d:
-            if len([i for i in list(d) if i == k1]) > 1:
-                raise ValueError("Repeating key: {}".format(k1))
-            for k_r in [i for i in self._refdata_keys_list if i != "reference_nfasta"]:
-                if k_r not in list(d[k1]):
-                    raise ValueError("Missing value for the key: {}".format(k_r))
-            for k2 in d[k1]:
-                f = d[k1][k2]
-                if k2 not in ["reference_nfasta", "ebwt_mask", "bt2_mask"] and not os.path.isfile(f):
-                    raise ValueError("Not found file: '{}', keys: '{}', '{}'".format(f, k1, k2))
-    def get_parsed_list(self):
-        return [RefDataLine(self._body_dict[k]) for k in self._body_dict]
-    def get_refdata_line_by_index(self, idx):
-        return self.get_parsed_list()[idx]
-
-
-class SampleDataLine:
-    """
-    The class describes single sample data file row
-    """
-    def __init__(self, single_sampledata_row):
-        self._body_list = Utilities.remove_empty_values([i.strip() for i in re.sub("[\r\n]", "", single_sampledata_row).split("\t")])
-        if len(self._body_list) < 2:
-            Utilities.log_and_raise("Failed to parse sample data row (not enough columns): {}".format(single_sampledata_row))
-        self.name = self._body_list[0]
-        self.raw_reads_files_list = self._body_list[1:]
-        if len(self.raw_reads_files_list) > 2:
-            logging.warning("Only up to two input files are supported for alignment, using first two values. Given sample data row: {}".format(single_sampledata_row))
-            self.raw_reads_files_list = self.raw_reads_files_list[:2]
-    def __len__(self):
-        """
-        :return:
-        Number of existing files
-        """
-        return sum([os.path.isfile(i) for i in self.raw_reads_files_list])
-    def export(self):
-        return "\t".join([self.name] + self.raw_reads_files_list)
-
-
-class SampleDataParser:
-    """
-    The class analyzes text files containing 2 or 3 tab-delimited columns
-    The first column contains sample name
-    Second and third (if present) columns contain paths to sample files
-    """
-    def __init__(self, sampledata_file_name):
-        if not os.path.isfile(sampledata_file_name):
-            Utilities.log_and_raise("Sample data linker file not found: {}".format(sampledata_file_name))
-        self._sampledatas_list = []
-        with open(sampledata_file_name, "r", encoding="utf-8") as f:
-            for r in f:
-                r = r.strip()
-                if len(r) > 0:
-                    try:
-                        self._sampledatas_list.append(SampleDataLine(r))
-                    except ValueError:
-                        continue
-        self._sampledatas_list = Utilities.remove_empty_values(self._sampledatas_list)
-    def __len__(self):
-        return len(self._sampledatas_list)
-    def get_parsed_list(self):
-        return self._sampledatas_list
-
-
-class PathsKeeper:
-    def __init__(self, sampledata, refdata):
-        self._refdata = refdata
-        self.bowtie_index_mask = self._refdata.bowtie_index_mask
-        self.bowtie2_index_mask = self._refdata.bowtie2_index_mask
-        self.samtools_index_file = self._refdata.samtools_index_file
-        self.bedtools_genome_file = self._refdata.bedtools_genome_file
-        self.annotation_file = self._refdata.annotation_file
-        self._sampledata = sampledata
-        self.sample_name = self._sampledata.name
-        self.raw_reads_files_list = self._sampledata.raw_reads_files_list
-        self.raw_reads_file_extension = self.raw_reads_files_list[0].split(".")[-1]
-        self._unmapped_reads_file_mask = "{a}{b}_{c}".format(a=mainInitializer.unmapped_reads_directory,
-                                                             b=self.sample_name,
-                                                             c=self._refdata.unmapped_output_mask)
-        self.unmapped_reads_file_name = "{a}.{b}".format(a=self._unmapped_reads_file_mask,
-                                                         b=self.raw_reads_file_extension)
-        self.pairwise_unmapped_reads_files_list = ["{a}.{i}.{b}".format(a=self._unmapped_reads_file_mask,
-                                                                        i=i,
-                                                                        b=self.raw_reads_file_extension) for i in [1, 2]]
-        self._mapped_reads_file_mask = "{a}{b}_{c}".format(a=mainInitializer.mapped_reads_directory,
-                                                           b=self.sample_name,
-                                                           c=self._refdata.mapped_output_mask)
-        self.mapped_reads_file_name = "{}.sam".format(self._mapped_reads_file_mask)
-        self.samtools_converted_file_name = "{}.bam".format(self._mapped_reads_file_mask)
-        self.samtools_sorted_file_name = "{}_sorted.bam".format(self._mapped_reads_file_mask)
-        self.samtools_index_file_name = "{}.bai".format(self.samtools_sorted_file_name)
-        self._statistics_file_mask = "{a}{b}_{c}".format(a=mainInitializer.statistics_directory,
-                                                         b=self.sample_name,
-                                                         c=self._refdata.mapped_output_mask)
-        self.samtools_idxstats_file_name = "{}_idxstats.txt".format(self._statistics_file_mask)
-        self.samtools_stats_file_name = "{}_sam_stats.txt".format(self._statistics_file_mask)
-        self.bedtools_histogram_file_name = "{}_genomeCoverageBed.txt".format(self._statistics_file_mask)
-        self.stacked_coverage_file_name = "{}_pos_bp.txt".format(self._statistics_file_mask)
-        self.final_coverage_file_name = "{}_coverage.tsv".format(self._statistics_file_mask)
-        self._logs_file_mask = "{a}{b}_{c}".format(a=mainInitializer.logs_directory,
-                                                   b=self.sample_name,
-                                                   c=self._refdata.mapped_output_mask)
-        self.aligner_log_file_name = "{}_aligner.log".format(self._logs_file_mask)
-        self.samtools_converted_log_file_name = "{}_sam2bam.log".format(self._logs_file_mask)
-        self.samtools_index_log_file_name = "{}_index_bam.log".format(self._logs_file_mask)
-
-
-class Aligner:
-    """
-    The class handles the main high-load single-queued pipeline:
-    Bowtie (or Bowtie2) -> SamTools
-    Consumes: SampleData object
-    """
-    def __init__(self, path_keeper):
-        self._pk = path_keeper
-        Utilities.batch_remove(self._pk.mapped_reads_file_name,
-                               self._pk.samtools_converted_file_name,
-                               self._pk.samtools_sorted_file_name,
-                               self._pk.unmapped_reads_file_name,
-                               *self._pk.pairwise_unmapped_reads_files_list,
-                               self._pk.aligner_log_file_name)
-    def _get_cmd(self):
-        """
-        The function for detection of colorspace reads which should be processed with Bowtie.
-        All other formats are normally processed with Bowtie2.
-        """
-        if self._pk.raw_reads_file_extension == "csfasta":
-            cmd = self.__compose_bowtie_cmds_list()
-        else:
-            cmd = self.__compose_bowtie2_cmds_list()
-        return [str(i) for i in cmd]
-    def ___is_large_index(self):
-        """
-        The function assignes '--large-index' argument to Bowtie command line.
-        Bowtie (Bowtie2) large indexes have extension 'ebwtl' ('bt2l') while common indexes end with 'ebwt' ('bt2').
-        However, Bowtie2 does not require this flag.
-        """
-        return any(i.strip().endswith(".ebwtl") for i in subprocess.getoutput("ls -d {}*".format(self._pk.bowtie_index_mask)).split("\n"))
-    def __compose_bowtie_cmds_list(self):
-        if len(self._pk.raw_reads_files_list) > 1:
-            logging.warning("More than one colorspace reads files per sample: '{}'. Only the first file would be processed".format("', '".join(self._pk.raw_reads_files_list)))
-        raw_reads_file = self._pk.raw_reads_files_list[0]
-        index_mask = self._pk.bowtie_index_mask
-        cmd = ['bowtie', '-f', '-C', '-S', '-t', '-v', '3', '-k', '1']
-        if self.___is_large_index():
-            cmd.append('--large-index')
-        # cmd.extend(['--threads', mainInitializer.threads_number, '--un', unmapped_reads_file, self.index_mask, raw_reads_file, self.mapped_reads_file_name])
-        cmd.extend(['--threads', mainInitializer.threads_number, '--un', self._pk.unmapped_reads_file_name, index_mask, raw_reads_file])
-        """
-        Bowtie manual page: https://github.com/BenLangmead/bowtie/blob/master/MANUAL.markdown
-        -f: The query input files (specified either as <m1> and <m2>, or as <s>) are FASTA files (usually having extension .fa, .mfa, .fna or similar). All quality values are assumed to be 40 on the Phred quality scale.
-        -C: Align in colorspace. Read characters are interpreted as colors. The index specified must be a colorspace index (i.e. built with bowtie-build -C, or bowtie will print an error message and quit. See Colorspace alignment for more details.
-        -S: Print alignments in SAM format. See the SAM output section of the manual for details. To suppress all SAM headers, use --sam-nohead in addition to -S/--sam. To suppress just the @SQ headers (e.g. if the alignment is against a very large number of reference sequences), use --sam-nosq in addition to -S/--sam. bowtie does not write BAM files directly, but SAM output can be converted to BAM on the fly by piping bowtie's output to samtools view.
-        -t: Print the amount of wall-clock time taken by each phase.
-        -v 3: Report alignments with at most <int> mismatches. -e and -l options are ignored and quality values have no effect on what alignments are valid. -v is mutually exclusive with -n.
-        -k 1: Report up to <int> valid alignments per read or pair (default: 1). Validity of alignments is determined by the alignment policy (combined effects of -n, -v, -l, and -e). If more than one valid alignment exists and the --best and --strata options are specified, then only those alignments belonging to the best alignment "stratum" will be reported. Bowtie is designed to be very fast for small -k but bowtie can become significantly slower as -k increases. If you would like to use Bowtie for larger values of -k, consider building an index with a denser suffix-array sample, i.e. specify a smaller -o/--offrate when invoking bowtie-build for the relevant index (see the Performance tuning section for details).
-        --large-index: Force usage of a 'large' index (those ending in '.ebwtl'), even if a small one is present. Default: off.
-        --threads <>: Launch <int> parallel search threads (default: 1). Threads will run on separate processors/cores and synchronize when parsing reads and outputting alignments. Searching for alignments is highly parallel, and speedup is fairly close to linear. This option is only available if bowtie is linked with the pthreads library (i.e. if BOWTIE_PTHREADS=0 is not specified at build time).
-        --un <>: Write all reads that could not be aligned to a file with name <filename>. Written reads will appear as they did in the input, without any of the trimming or translation of quality values that may have taken place within Bowtie. Paired-end reads will be written to two parallel files with _1 and _2 inserted in the filename, e.g., if <filename> is unaligned.fq, the #1 and #2 mates that fail to align will be written to unaligned_1.fq and unaligned_2.fq respectively. Unless --max is also specified, reads with a number of valid alignments exceeding the limit set with the -m option are also written to <filename>.
-        """
-        return cmd
-    def ___is_compressed_raw_reads_file(self):
-        return any(self._pk.raw_reads_file_extension == i for i in ["zip", "tar", "gz", "bz2"])
-    def __compose_bowtie2_cmds_list(self):
-        cmd = ['bowtie2']
-        index_mask = self._pk.bowtie2_index_mask
-        if self.___is_compressed_raw_reads_file():
-            cmd.append('--un-conc-gz')
-        else:
-            cmd.append('--un')
-        cmd.extend([self._pk.unmapped_reads_file_name, '-x', index_mask])
-        if len(self._pk.raw_reads_files_list) == 1:
-            if any(self._pk.raw_reads_file_extension == i for i in ["fasta", "fa", "fna"]):
-                cmd.append('-f')
-            cmd.append(self._pk.raw_reads_files_list[0])
-        else:
-            cmd.extend(['-1', self._pk.raw_reads_files_list[0], '-2', self._pk.raw_reads_files_list[1]])
-        # cmd.extend(['--threads', mainInitializer.threads_number, '-S', self.mapped_reads_file_name])
-        cmd.extend(['--threads', mainInitializer.threads_number, '--very-sensitive', '-S'])
-        """
-        Bowtie2 manual page: https://github.com/BenLangmead/bowtie2/blob/master/MANUAL.markdown
-        --un-conc-gz <>: Write paired-end reads that fail to align concordantly to file(s) at <path>. These reads correspond to the SAM records with the FLAGS 0x4 bit set and either the 0x40 or 0x80 bit set (depending on whether it's mate #1 or #2). .1 and .2 strings are added to the filename to distinguish which file contains mate #1 and mate #2. If a percent symbol, %, is used in <path>, the percent symbol is replaced with 1 or 2 to make the per-mate filenames. Otherwise, .1 or .2 are added before the final dot in <path> to make the per-mate filenames. Reads written in this way will appear exactly as they did in the input files, without any modification (same sequence, same name, same quality string, same quality encoding). Reads will not necessarily appear in the same order as they did in the inputs.
-        --un <>: Write unpaired reads that fail to align to file at <path>. These reads correspond to the SAM records with the FLAGS 0x4 bit set and neither the 0x40 nor 0x80 bits set. If --un-gz is specified, output will be gzip compressed. If --un-bz2 or --un-lz4 is specified, output will be bzip2 or lz4 compressed. Reads written in this way will appear exactly as they did in the input file, without any modification (same sequence, same name, same quality string, same quality encoding). Reads will not necessarily appear in the same order as they did in the input.
-        -x <>: The basename of the index for the reference genome. The basename is the name of any of the index files up to but not including the final .1.bt2 / .rev.1.bt2 / etc. bowtie2 looks for the specified index first in the current directory, then in the directory specified in the BOWTIE2_INDEXES environment variable.
-        -f: Reads (specified with <m1>, <m2>, <s>) are FASTA files. FASTA files usually have extension .fa, .fasta, .mfa, .fna or similar. FASTA files do not have a way of specifying quality values, so when -f is set, the result is as if --ignore-quals is also set.
-        -1 <>: Comma-separated list of files containing mate 1s (filename usually includes _1), e.g. -1 flyA_1.fq,flyB_1.fq. Sequences specified with this option must correspond file-for-file and read-for-read with those specified in <m2>. Reads may be a mix of different lengths. If - is specified, bowtie2 will read the mate 1s from the "standard in" or "stdin" filehandle.
-        -2 <>: Comma-separated list of files containing mate 2s (filename usually includes _2), e.g. -2 flyA_2.fq,flyB_2.fq. Sequences specified with this option must correspond file-for-file and read-for-read with those specified in <m1>. Reads may be a mix of different lengths. If - is specified, bowtie2 will read the mate 2s from the "standard in" or "stdin" filehandle.
-        --threads <>: Launch NTHREADS parallel search threads (default: 1). Threads will run on separate processors/cores and synchronize when parsing reads and outputting alignments. Searching for alignments is highly parallel, and speedup is close to linear. Increasing -p increases Bowtie 2's memory footprint. E.g. when aligning to a human genome index, increasing -p from 1 to 8 increases the memory footprint by a few hundred megabytes. This option is only available if bowtie is linked with the pthreads library (i.e. if BOWTIE_PTHREADS=0 is not specified at build time).
-        --very-sensitive: Same as: -D 20 -R 3 -N 0 -L 20 -i S,1,0.50
-        -S: File to write SAM alignments to. By default, alignments are written to the "standard out" or "stdout" filehandle (i.e. the console).
-        """
-        return cmd
-    def run(self):
-        bwt_cmd_string = " ".join(self._get_cmd())
-        cmd = "{bwt} | samtools view -Su -@ {cores} | samtools sort - -o {out} -@ {cores}".format(bwt=bwt_cmd_string,
-                                                                                                  cores=mainInitializer.threads_number,
-                                                                                                  out=self._pk.samtools_sorted_file_name)
-        logging.info("Alignment launch command line: '{}'".format(cmd))
-        log = subprocess.getoutput(cmd)
-        Utilities.dump_string(string=log, file=self._pk.aligner_log_file_name)
-
-
-class CoverageExtractor:
-    def __init__(self, paths_keeper):
-        self._pk = paths_keeper
-    def _sam2bam2sorted_bam(self):
-        Utilities.batch_remove(self._pk.samtools_sorted_file_name, self._pk.samtools_converted_log_file_name)
-        # Avoiding self._pk.samtools_converted_file_name
-        s = subprocess.getoutput("samtools view -Su {a} -@ 1 | \
-                                  samtools sort - -o {b} -@ 1".format(a=self._pk.mapped_reads_file_name,
-                                                                      b=self._pk.samtools_sorted_file_name))
-        Utilities.dump_string(string=s, file=self._pk.samtools_converted_log_file_name)
-        print("Sorted SAM file: '{}'".format(self._pk.samtools_sorted_file_name))
-    def _index_bam(self):
-        Utilities.batch_remove(self._pk.samtools_index_file_name, self._pk.samtools_index_log_file_name)
-        s = subprocess.getoutput("samtools index {}".format(self._pk.samtools_sorted_file_name))
-        Utilities.dump_string(string=s, file=self._pk.samtools_index_log_file_name)
-        print("Indexed BAM file: '{}'".format(self._pk.samtools_index_file_name))
-    def _bam2idxstats(self):
-        Utilities.batch_remove(self._pk.samtools_idxstats_file_name)
-        s = subprocess.getoutput("samtools idxstats {}".format(self._pk.samtools_sorted_file_name))
-        Utilities.dump_string(string=s, file=self._pk.samtools_idxstats_file_name)
-        print("Mapped reads statistics: '{}'".format(self._pk.samtools_idxstats_file_name))
-    def _bam2stats(self):
-        Utilities.batch_remove(self._pk.samtools_stats_file_name)
-        s = subprocess.getoutput("samtools stats {}".format(self._pk.samtools_sorted_file_name))
-        Utilities.dump_string(string=s, file=self._pk.samtools_stats_file_name)
-        print("Total coverage statistics: '{}'".format(self._pk.samtools_stats_file_name))
-    def _bam2histogram(self):
-        Utilities.batch_remove(self._pk.bedtools_histogram_file_name)
-        s = subprocess.getoutput("genomeCoverageBed -ibam {}".format(self._pk.samtools_sorted_file_name))
-        Utilities.dump_string(string=s, file=self._pk.bedtools_histogram_file_name)
-        print("Coverage histogram data: '{}'".format(self._pk.bedtools_histogram_file_name))
-    def _stack_coverage(self):
-        Utilities.batch_remove(self._pk.stacked_coverage_file_name)
-        coverages_list = subprocess.getoutput("sort {}".format(self._pk.bedtools_histogram_file_name)).split('\n')
-        output_list = []
-        counting_id = ""
-        row_processing_buffer = []
-        # genomecov file columns: reference sequence name, depth of coverage, breadth of coverage with that depth, sequence length, coverage ratio
-        for row in coverages_list:
-            row_list = row.split('\t')
-            # remove service lines
-            if len(row_list[0].strip()) > 0 and row_list[0].strip() != 'genome' and '*' not in row_list[0]:
-                if row_list[0] == counting_id and int(row_list[1]) > 0:
-                    row_processing_buffer.append(row_list)
-                else:
-                    if len(row_processing_buffer) > 0:
-                        # output file columns: reference sequence name, maximal depth of coverage, total breadth of coverage, sequence length, coverage ratio, total mapped bases
-                        row_output_buffer = [counting_id, 0, 0, int(row_processing_buffer[0][3]), 0, 0]
-                        for mapped_row_list in row_processing_buffer:
-                            row_output_buffer[1] = max(int(mapped_row_list[1]), int(row_output_buffer[1]))
-                            row_output_buffer[2] += int(mapped_row_list[2])
-                            row_output_buffer[4] += float(mapped_row_list[4])
-                            row_output_buffer[5] = int(mapped_row_list[1]) * int(mapped_row_list[2])
-                        output_list.append('\t'.join(str(column) for column in row_output_buffer))
-                    row_processing_buffer = []
-                    counting_id = row_list[0]
-        Utilities.dump_string('\n'.join(output_list), self._pk.stacked_coverage_file_name)
-        print("Stacked coverage: '{}'".format(self._pk.stacked_coverage_file_name))
-    def __get_base_alignment_stats(self):
-        s = subprocess.getoutput("grep ^SN {} | cut -f 2-".format(self._pk.samtools_stats_file_name))
-        d = {"total_reads": re.findall('raw total sequences:\t(\d*)', s)[0],
-             "mapped_reads": re.findall('reads mapped:\t(\d*)', s)[0],
-             "total_bp": re.findall('total length:\t(\d*)', s)[0],
-             "mapped_bp": re.findall('bases mapped:\t(\d*)', s)[0]}
-        d = {"sample_{}".format(k): int(d[k]) for k in d}
-        return d
-    def _reference2statistics(self):
-        output_file = self._pk.final_coverage_file_name
-        pos_bp_file = self._pk.stacked_coverage_file_name
-        Utilities.batch_remove(output_file)
-        if len(subprocess.getoutput("cat {}".format(pos_bp_file).strip())) == 0:
-            print("Failed to get coverage - Empty file: ".format(self._pk.stacked_coverage_file_name))
-            return
-        stats_dict = self.__get_base_alignment_stats()
-        reference_df = pd.read_table(self._pk.bedtools_genome_file, header='infer', sep='\t', names=['reference_id', 'id_bp'])
-        stacked_coverages_df = pd.read_table(pos_bp_file, sep='\t', header='infer', names=["reference_id", "id_maximal_coverage_depth", "id_coverage_breadth", "id_bp", "id_coverage_breadth_to_id_bp", "id_mapped_bp"])
-        genomes_coverages_df = pd.merge(reference_df, stacked_coverages_df.loc[:, [column for column in list(stacked_coverages_df) if column != "id_bp"]], on="reference_id", how='outer')
-        genomes_coverages_df = genomes_coverages_df.loc[genomes_coverages_df['reference_id'] != 'genome']
-        genomes_coverages_df["id_total_relative_abundance"] = genomes_coverages_df.loc[:, "id_mapped_bp"] / (genomes_coverages_df.loc[:, "id_bp"] * stats_dict["sample_total_bp"])
-        genomes_coverages_df["id_mapped_relative_abundance"] = genomes_coverages_df.loc[:, "id_mapped_bp"] / (genomes_coverages_df.loc[:, "id_bp"] * stats_dict["sample_mapped_bp"])
-        genomes_coverages_df["sample_total_reads"] = stats_dict["sample_total_reads"]
-        genomes_coverages_df["sample_mapped_reads"] = stats_dict["sample_mapped_reads"]
-        genomes_coverages_df["sample_total_bp"] = stats_dict["sample_total_bp"]
-        genomes_coverages_df["sample_mapped_bp"] = stats_dict["sample_mapped_bp"]
-        genomes_coverages_df["sample_average_total_reads_bp"] = float(stats_dict["sample_total_reads"]) / float(stats_dict["sample_total_bp"])
-        genomes_coverages_df["sample_average_mapped_reads_bp"] = float(stats_dict["sample_mapped_reads"]) / float(stats_dict["sample_total_bp"])
-        genomes_coverages_df["sample_mapped_reads_to_total_reads"] = float(stats_dict["sample_mapped_reads"]) / float(stats_dict["sample_total_reads"])
-        idxstats_df = pd.read_table(self._pk.samtools_idxstats_file_name, sep='\t', header='infer', names=["reference_id", "id_bp", "id_mapped_reads", "id_unmapped_reads"])
-        genomes_coverages_df = pd.merge(genomes_coverages_df, idxstats_df.loc[:, [column for column in list(idxstats_df) if column != "id_bp"]], on="reference_id", how='outer')
-        genomes_coverages_df["id_mapped_reads_per_million_sample_total_reads"] = genomes_coverages_df.loc[:, "id_mapped_reads"] * (10 ** 6) / float(stats_dict["sample_total_reads"])
-        genomes_coverages_df["id_mapped_reads_per_million_sample_mapped_reads"] = genomes_coverages_df.loc[:, "id_mapped_reads"] * (10 ** 6) / float(stats_dict["sample_mapped_reads"])
-        output_df = genomes_coverages_df.loc[:, ["reference_id", "id_bp", "id_coverage_breadth", "id_mapped_bp", "id_coverage_breadth_to_id_bp", "id_maximal_coverage_depth", "id_total_relative_abundance", "id_mapped_relative_abundance", "id_mapped_reads", "sample_total_reads", "sample_mapped_reads", "sample_total_bp", "sample_mapped_bp", "sample_average_total_reads_bp", "sample_average_mapped_reads_bp", "sample_mapped_reads_to_total_reads", "id_mapped_reads_per_million_sample_total_reads", "id_mapped_reads_per_million_sample_mapped_reads"]]
-        if mainInitializer.non_zero_bool:
-            output_df = output_df[output_df.id_coverage_breadth.notnull()]
-        else:
-            output_df = output_df.fillna(0)
-        for int_column in ["id_bp", "id_coverage_breadth", "id_mapped_bp", "id_maximal_coverage_depth", "id_mapped_reads", "sample_total_reads", "sample_mapped_reads", "sample_total_bp", "sample_mapped_bp"]:
-            output_df[int_column] = output_df.loc[:, int_column].astype(int)
-        output_df = output_df.loc[~output_df['reference_id'].str.contains('*', regex=False)]
-        output_df.to_csv(output_file, sep='\t', index=False)
-        print("Extracted coverage table: '{}'".format(output_file))
-    def run(self):
-        functions_list = [self._sam2bam2sorted_bam, self._index_bam, self._bam2idxstats, self._bam2stats, self._bam2histogram, self._stack_coverage, self._reference2statistics]
-        if os.path.isfile(self._pk.samtools_sorted_file_name):
-            functions_list = functions_list[1:]
-        elif os.path.isfile(self._pk.samtools_converted_file_name) or os.path.isfile(self._pk.mapped_reads_file_name):
-            pass
-        else:
-            raise ValueError("Not recognized input file: '{}'".format(mainInitializer.mapped_file_name))
-        tmp = [i() for i in functions_list]
-        del tmp
 
 
 class PipelineHandler:
     def __init__(self, refdata):
-        self.refdata = refdata
+        self._refdata = refdata
+
     def _run_aligner(self, sampledata):
-        keeper = PathsKeeper(sampledata=sampledata, refdata=self.refdata)
-        aligner = Aligner(keeper)
+        keeper = PathsKeeper(sampledata=sampledata, refdata=self._refdata, output_dir=mainInitializer.output_dir)
+        aligner = Aligner(keeper, threads_number=mainInitializer.threads_number)
         aligner.run()
+
     def _run_extractor(self, sampledata):
-        keeper = PathsKeeper(sampledata=sampledata, refdata=self.refdata)
+        keeper = PathsKeeper(sampledata=sampledata, refdata=self._refdata, output_dir=mainInitializer.output_dir)
         extractor = CoverageExtractor(keeper)
         extractor.run()
+
     def run(self):
         Utilities.single_core_queue(func=self._run_aligner, queue=sampleFilesList)
         if not mainInitializer.no_coverage_bool:
-            Utilities.multi_core_queue(func=self._run_extractor, queue=sampleFilesList)
+            Utilities.multi_core_queue(func=self._run_extractor, queue=sampleFilesList, processes=mainInitializer.threads_number)
 
 
 class ChunksHandler:
     def __init__(self):
-        self.refDataParser = RefDataParser(mainInitializer.refdata_file_name)
+        array = RefDataArray.read(mainInitializer.refdata_file_name)
+        self.chunks_list = array.get_parsed_list()
+
     @staticmethod
-    def _run_pipeline(refdata):
+    def _run_pipeline(refdata: RefDataLine):
         handler = PipelineHandler(refdata)
         handler.run()
+
     def run(self):
-        Utilities.single_core_queue(self._run_pipeline, self.refDataParser.get_parsed_list())
+        Utilities.single_core_queue(func=self._run_pipeline, queue=self.chunks_list)
 
 
 if __name__ == '__main__':
