@@ -56,11 +56,11 @@ class Utilities:
 
     @staticmethod
     def dump_list(lst: list, file: str):
-        Utilities.dump_string(string="\n".join(lst) + "\n", file=file)
+        Utilities.dump_string(string="\n".join([str(i) for i in lst]) + "\n", file=file)
 
     @staticmethod
     def dump_2d_array(array: list, file: str):
-        Utilities.dump_list(lst=["\t".join(i) for i in array], file=file)
+        Utilities.dump_list(lst=["\t".join(str(i)) for i in array], file=file)
 
     @staticmethod
     def get_time():
@@ -81,20 +81,29 @@ class Utilities:
         (output, error) = process.communicate()
         process.wait()
         if error:
-            print(error)
+            logging.critical("""
+Error report:
+{}
+""".format(error))
+        exit_code = process.returncode
+        stdout = output.decode("utf-8")
         if not output_direction:
-            print(output.decode("utf-8"))
+            logging.debug("""
+Completed command arguments: '{a}'; exit code: {b}; STDOUT details: 
+{c}
+""".format(a=input_direction, b=exit_code, c=stdout))
         else:
-            Utilities.dump_string(string=output.decode("utf-8"), file=output_direction)
+            logging.debug("Completed command arguments: '{a}'; exit code: {b}; log file: '{c}'").format(a=input_direction, b=exit_code, c=output_direction)
+            Utilities.dump_string(string=stdout, file=output_direction)
 
     @staticmethod
     def batch_remove(*args):
         import os
-        lst = [i for i in args if os.path.isfile(i) or os.path.isdir(i)]
-        if "/" not in lst:  # I know it is useless
-            s = " ".join(lst)
+        items = [i for i in args if os.path.isfile(i) or (os.path.isdir(i) and i != "/")]  # I know it is useless
+        if len(items) > 0:
+            s = " ".join(items)
             subprocess.getoutput("rm -rf {}".format(s))
-            print("Removed items: {}".format(s))
+            logging.info("Removed items: {}".format(s))
 
     @staticmethod
     def single_core_queue(func, queue: list):

@@ -64,12 +64,12 @@ class RefDataArray:
 
     @staticmethod
     def read(file: str):
-        _file_wrapper = open(file=file, mode="r", encoding="utf-8")
+        wrapper = open(file=file, mode="r", encoding="utf-8")
         try:
             if file.endswith(".json"):
-                return RefDataArray._parse_json_refdata
+                return RefDataArray._parse_json_refdata(wrapper)
             else:
-                return RefDataArray._parse_table_refdata
+                return RefDataArray._parse_table_refdata(wrapper)
         except ValueError:
             Utilities.log_and_raise("Bad reference data file: {}".format(file))
 

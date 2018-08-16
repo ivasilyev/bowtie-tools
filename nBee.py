@@ -97,8 +97,7 @@ class PipelineHandler:
 
 class ChunksHandler:
     def __init__(self):
-        array = RefDataArray.read(mainInitializer.refdata_file_name)
-        self.chunks_list = array.get_parsed_list()
+        self.chunks_list = RefDataArray.read(mainInitializer.refdata_file_name).get_parsed_list()
 
     @staticmethod
     def _run_pipeline(refdata: RefDataLine):
@@ -113,9 +112,11 @@ if __name__ == '__main__':
     mainInitializer = Initializer()
     launchTime = Utilities.get_time()
     nodeName = subprocess.getoutput("hostname").strip()
-    logging.basicConfig(format=u'%(levelname)-8s [%(asctime)s] %(message)s', level=logging.DEBUG, filename="{a}nBee_{b}_{c}.log".format(a=mainInitializer.logs_directory,
-                                                                                                                                        b=nodeName,
-                                                                                                                                        c=launchTime))
+    mainLogFile = "{a}nBee_{b}_{c}.log".format(a=mainInitializer.logs_directory, b=nodeName, c=launchTime)
+    print("Started main workflow with log file: '{}'".format(mainLogFile))
+    logging.basicConfig(format=u'%(levelname)-8s [%(asctime)s] %(message)s',
+                        level=logging.DEBUG,
+                        handlers=[logging.FileHandler(mainLogFile), logging.StreamHandler()])
     sampleDataParser = SampleDataParser(mainInitializer.sampledata_file_name)
     sampleFilesList = sampleDataParser.get_parsed_list()
     if len(sampleFilesList) == 0:
