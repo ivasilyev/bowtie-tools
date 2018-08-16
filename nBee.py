@@ -27,7 +27,7 @@ class Initializer:
         self.no_coverage_bool = namespace.no_coverage
         self.output_dir = Utilities.ends_with_slash(namespace.output)
         self.logs_directory = "{}Logs/".format(self.output_dir)
-        [os.makedirs(i) for i in [self.output_dir, self.logs_directory]]
+        [os.makedirs(i, exist_ok=True) for i in [self.output_dir, self.logs_directory]]
 
     @staticmethod
     def _parse_args():
