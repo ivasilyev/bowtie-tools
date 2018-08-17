@@ -34,3 +34,24 @@ bowtie -f -C -t -v 3 -k 1 --threads 20 --un /data2/bio/Metagenomes/IGC/test/col_
 samtools view -bu -@ 1 /data2/bio/Metagenomes/IGC/test/col_mapped.sam | \
 samtools sort - -@ 1 -o /data2/bio/Metagenomes/IGC/test/col_mapped_sorted.bam
 genomeCoverageBed -ibam /data2/bio/Metagenomes/IGC/test/col_mapped_sorted.bam > /data2/bio/Metagenomes/IGC/test/col_mapped_gc.tsv
+
+echo Low-level no-pipeline processing with STOUT and STDERR split
+bowtie2 --threads 20 --very-sensitive --un-conc /data2/bio/Metagenomes/IGC/test/unmapped.fa -x /data/reference/IGC/igc_v2014.03/index/igc_v2014.03_chunk_1_bowtie2 -1 /data2/bio/ecoli_komfi/raw_reads/1-39-0-5_S84_R1_001.fastq.gz -2 /data2/bio/ecoli_komfi/raw_reads/1-39-0-5_S84_R2_001.fastq.gz 1> /data2/bio/Metagenomes/IGC/test/mapped.sam 2> /data2/bio/Metagenomes/IGC/test/mapped.log | \
+
+echo Low-level pipeline processing with STOUT and STDERR split
+bowtie2 --threads 20 --very-sensitive --un-conc /data2/bio/Metagenomes/IGC/test/unmapped.fa -x /data/reference/IGC/igc_v2014.03/index/igc_v2014.03_chunk_1_bowtie2 -1 /data2/bio/ecoli_komfi/raw_reads/1-39-0-5_S84_R1_001.fastq.gz -2 /data2/bio/ecoli_komfi/raw_reads/1-39-0-5_S84_R2_001.fastq.gz 2> /data2/bio/Metagenomes/IGC/test/mapped.log | \
+samtools view - -bu -@ 20 | \
+samtools sort - -@ 20 -o /data2/bio/Metagenomes/IGC/test/mapped_sorted.bam
+genomeCoverageBed -ibam /data2/bio/Metagenomes/IGC/test/mapped_sorted.bam > /data2/bio/Metagenomes/IGC/test/mapped_gc.tsv
+
+echo Low-level pipeline colorspace processing
+bowtie -f -C -t -v 3 -k 1 --threads 20 --un /data2/bio/Metagenomes/IGC/test/col_unmapped.csfasta /data/reference/IGC/igc_v2014.03/index/igc_v2014.03_chunk_1_colorspace /data2/bio/Metagenomes/HG19/Non-mapped_reads/107VZK_no_hg19.csfasta -S | \
+samtools view - -bu -@ 20 | \
+samtools sort - -@ 20 -o /data2/bio/Metagenomes/IGC/test/col_mapped_sorted.bam
+genomeCoverageBed -ibam /data2/bio/Metagenomes/IGC/test/col_mapped_sorted.bam > /data2/bio/Metagenomes/IGC/test/col_mapped_gc.tsv
+
+echo Low-level pipeline colorspace processing with STOUT and STDERR split
+bowtie -f -C -t -v 3 -k 1 --threads 20 --un /data2/bio/Metagenomes/IGC/test/col_unmapped.csfasta /data/reference/IGC/igc_v2014.03/index/igc_v2014.03_chunk_1_colorspace /data2/bio/Metagenomes/HG19/Non-mapped_reads/107VZK_no_hg19.csfasta -S 2> /data2/bio/Metagenomes/IGC/test/col_mapped.log | \
+samtools view - -bu -@ 20 | \
+samtools sort - -@ 20 -o /data2/bio/Metagenomes/IGC/test/col_mapped_sorted.bam
+genomeCoverageBed -ibam /data2/bio/Metagenomes/IGC/test/col_mapped_sorted.bam > /data2/bio/Metagenomes/IGC/test/col_mapped_gc.tsv
