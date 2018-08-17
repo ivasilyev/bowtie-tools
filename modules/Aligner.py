@@ -51,7 +51,7 @@ class Aligner:
         cmd = ['bowtie', '-f', '-C', '-t', '-v', '3', '-k', '1', '--threads', self._threads_number]
         if self.___is_large_index():
             cmd.append('--large-index')
-        cmd.extend(['--un', self._pk.unmapped_reads_file_name, index_mask, raw_reads_file, '-S', self._pk.mapped_reads_file_name])
+        cmd.extend(['--un', self._pk.unmapped_reads_file_name, index_mask, raw_reads_file, '-S'])
         """
         Bowtie manual page: https://github.com/BenLangmead/bowtie/blob/master/MANUAL.markdown
         -f: The query input files (specified either as <m1> and <m2>, or as <s>) are FASTA files (usually having extension .fa, .mfa, .fna or similar). All quality values are assumed to be 40 on the Phred quality scale.
@@ -80,7 +80,6 @@ class Aligner:
             else:
                 cmd.append("--un-conc")
             cmd.extend([self._pk.unmapped_reads_file_name, "-x", self._pk.bowtie2_index_mask, "-1", self._pk.raw_reads_files_list[0], "-2", self._pk.raw_reads_files_list[1]])
-        cmd.extend(["-S", self._pk.mapped_reads_file_name])
         """
         Bowtie2 manual page: https://github.com/BenLangmead/bowtie2/blob/master/MANUAL.markdown
         --un-conc-gz <>: Write paired-end reads that fail to align concordantly to file(s) at <path>. These reads correspond to the SAM records with the FLAGS 0x4 bit set and either the 0x40 or 0x80 bit set (depending on whether it's mate #1 or #2). .1 and .2 strings are added to the filename to distinguish which file contains mate #1 and mate #2. If a percent symbol, %, is used in <path>, the percent symbol is replaced with 1 or 2 to make the per-mate filenames. Otherwise, .1 or .2 are added before the final dot in <path> to make the per-mate filenames. Reads written in this way will appear exactly as they did in the input files, without any modification (same sequence, same name, same quality string, same quality encoding). Reads will not necessarily appear in the same order as they did in the inputs.
@@ -97,6 +96,11 @@ class Aligner:
 
     def run(self):
         bwt_cmd_string = " ".join(self._get_cmd())
-        logging.info("Alignment launch command line: '{}'".format(bwt_cmd_string))
-        log = subprocess.getoutput(bwt_cmd_string)
-        Utilities.dump_string(string=log, file=self._pk.aligner_log_file_name)
+        pipeline = """
+{a} 2> {b} | \
+samtools view - -bu -@ {c} | \
+samtools sort - -@ {c} -o {d}
+""".format(a=bwt_cmd_string, b=self._pk.aligner_log_file_name, c=self._threads_number, d=self._pk.samtools_sorted_file_name)
+        logging.debug("Started alignment pipeline with arguments: '{}'".format(pipeline))
+        s = subprocess.getoutput(pipeline)
+        logging.info("Completed alignment pipeline with arguments: '{a}' and output:\n{b}\n".format(a=pipeline, b=s))
