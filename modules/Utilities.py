@@ -41,13 +41,21 @@ class Utilities:
         return s
 
     @staticmethod
-    def load_list(file: str):
+    def split_lines(string: str):
         import re
-        return Utilities.remove_empty_values([re.sub("[\r\n]+", "", i) for i in Utilities.load_string(file).split("\n")])
+        return Utilities.remove_empty_values([i.strip() for i in re.sub("[\r\n]+", "\n", string).split("\n")])
+
+    @staticmethod
+    def load_list(file: str):
+        return Utilities.split_lines(Utilities.load_string(file))
+
+    @staticmethod
+    def string_to_2d_array(string: str):
+        return Utilities.remove_empty_values([[j.strip() for j in i.split("\t")] for i in Utilities.split_lines(string)])
 
     @staticmethod
     def load_2d_array(file: str):
-        return [i.split("\t") for i in Utilities.load_list(file)]
+        return Utilities.string_to_2d_array(Utilities.load_string(file))
 
     @staticmethod
     def dump_string(string: str, file: str):
