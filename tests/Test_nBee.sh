@@ -15,8 +15,12 @@ nano /home/docker/scripts/modules/Aligner.py
 echo Edit nBee.py
 nano /home/docker/scripts/nBee.py
 
+echo Create sampledata
+head -n 10 /data1/bio/projects/tgrigoreva/ecoli_plates_suspension/raw.sampledata > /data1/bio/projects/tgrigoreva/ecoli_plates_suspension/raw_10.sampledata
+
 echo Test nBee
-python3 /home/docker/scripts/nBee.py -i /data1/bio/projects/tgrigoreva/ecoli_plates_suspension/raw.sampledata -r /data/reference/IGC/igc_v2014.03/index/igc_v2014.03_refdata.json -m no_hg19 -t half -o /data2/bio/Metagenomes/IGC/test
+rm -rf /data1/bio/sandbox/nBee/igc
+python3 /home/docker/scripts/nBee.py -i /data1/bio/projects/tgrigoreva/ecoli_plates_suspension/raw_10.sampledata -r /data/reference/IGC/igc_v2014.03/index/igc_v2014.03_refdata.json -m no_hg19 -t half -o /data1/bio/sandbox/nBee/igc
 
 echo Low-level pipeline processing
 bowtie2 --un /data2/bio/Metagenomes/IGC/test/unmapped -x /data/reference/IGC/igc_v2014.03/index/igc_v2014.03_chunk_1_bowtie2 --threads 20 --very-sensitive -S -1 /data2/bio/ecoli_komfi/raw_reads/1-39-0-5_S84_R1_001.fastq.gz -2 /data2/bio/ecoli_komfi/raw_reads/1-39-0-5_S84_R2_001.fastq.gz | \
@@ -55,3 +59,19 @@ bowtie -f -C -t -v 3 -k 1 --threads 20 --un /data2/bio/Metagenomes/IGC/test/col_
 samtools view - -bu -@ 20 | \
 samtools sort - -@ 20 -o /data2/bio/Metagenomes/IGC/test/col_mapped_sorted.bam
 genomeCoverageBed -ibam /data2/bio/Metagenomes/IGC/test/col_mapped_sorted.bam > /data2/bio/Metagenomes/IGC/test/col_mapped_gc.tsv
+
+echo Edit CoverageExtractor.py
+nano /home/docker/scripts/modules/CoverageExtractor.py
+
+echo Edit PathsKeeper.py
+nano /home/docker/scripts/modules/PathsKeeper.py
+
+echo Edit Utilities.py
+nano /home/docker/scripts/modules/Utilities.py
+
+echo Create single-row sampledata
+head -n 1 /data1/bio/projects/tgrigoreva/ecoli_plates_suspension/raw.sampledata > /data1/bio/projects/tgrigoreva/ecoli_plates_suspension/raw_1.sampledata
+
+echo Test nBee
+rm -rf /data1/bio/sandbox/nBee/igc1
+python3 /home/docker/scripts/nBee.py -i /data1/bio/projects/tgrigoreva/ecoli_plates_suspension/raw_1.sampledata -r /data/reference/IGC/igc_v2014.03/index/igc_v2014.03_refdata.json -m no_hg19 -t half -o /data1/bio/sandbox/nBee/igc1

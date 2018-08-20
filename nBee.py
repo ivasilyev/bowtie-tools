@@ -92,7 +92,7 @@ class PipelineHandler:
     def run(self):
         Utilities.single_core_queue(func=self._run_aligner, queue=sampleFilesList)
         if not mainInitializer.no_coverage_bool:
-            Utilities.multi_core_queue(func=self._run_extractor, queue=sampleFilesList, processes=mainInitializer.threads_number)
+            Utilities.multi_core_queue(func=self._run_extractor, queue=sampleFilesList)
 
 
 class ChunksHandler:
@@ -120,6 +120,6 @@ if __name__ == '__main__':
     sampleDataParser = SampleDataParser(mainInitializer.sampledata_file_name)
     sampleFilesList = sampleDataParser.get_parsed_list()
     if len(sampleFilesList) == 0:
-        Utilities.log_and_raise("No files to process: {}".format(sampleFilesList))
+        Utilities.log_and_raise("No files to process, exiting: '{}'".format(sampleFilesList))
     chunksHandler = ChunksHandler()
     chunksHandler.run()

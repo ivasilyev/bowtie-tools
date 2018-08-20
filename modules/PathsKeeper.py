@@ -50,9 +50,8 @@ class PathsKeeper:
         self.final_coverage_file_name = "{}_coverage.tsv".format(statistics_file_mask)
         logs_file_mask = "{a}{b}_{c}".format(a=logs_directory, b=sample_name, c=mapped_output_mask)
         self.aligner_log_file_name = "{}_aligner.log".format(logs_file_mask)
-        self.samtools_converted_log_file_name = "{}_sam2bam.log".format(logs_file_mask)
-        self.samtools_index_log_file_name = "{}_index_bam.log".format(logs_file_mask)
-
-
-
-
+        self.samtools_converted_log_file_name = "{}_samtools_sort.log".format(logs_file_mask)
+        self.samtools_index_log_file_name = "{}_samtools_index.log".format(logs_file_mask)
+        self.samtools_idxstats_log_file_name = "{}_samtools_idxstats.log".format(logs_file_mask)
+        self.samtools_stats_log_file_name = "{}_samtools_stats.log".format(logs_file_mask)
+        self.genomeCoverageBed_log_file_name = "{}_genomeCoverageBed.log".format(logs_file_mask)

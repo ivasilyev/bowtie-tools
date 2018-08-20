@@ -20,7 +20,6 @@ class CoverageExtractor:
         self._bedtools_histogram_2d_array = []
         self._stacked_coverages_df = pd.DataFrame()
 
-
     def _sam2bam2sorted_bam(self):
         Utilities.batch_remove(self._pk.samtools_sorted_file_name, self._pk.samtools_converted_log_file_name)
         # Avoiding self._pk.samtools_converted_file_name
@@ -37,26 +36,29 @@ class CoverageExtractor:
         logging.info("Indexed BAM file: '{}'".format(self._pk.samtools_index_file_name))
 
     def _bam2idxstats(self):
-        Utilities.batch_remove(self._pk.samtools_idxstats_file_name)
-        s = subprocess.getoutput("samtools idxstats {}".format(self._pk.samtools_sorted_file_name))
+        Utilities.batch_remove(self._pk.samtools_idxstats_file_name, self._pk.samtools_idxstats_log_file_name)
+        s = subprocess.getoutput("samtools idxstats {a} 2> {b}".format(a=self._pk.samtools_sorted_file_name,
+                                                                       b=self._pk.samtools_idxstats_log_file_name))
         Utilities.dump_string(string=s, file=self._pk.samtools_idxstats_file_name)
+        logging.info("Saved mapped reads statistics: '{}'".format(self._pk.samtools_idxstats_file_name))
         self._samtools_idxstats_df = pd.DataFrame(Utilities.string_to_2d_array(s), columns=["reference_id", "id_bp", "id_mapped_reads", "id_unmapped_reads"])
-        logging.info("Mapped reads statistics: '{}'".format(self._pk.samtools_idxstats_file_name))
 
     def _bam2stats(self):
-        Utilities.batch_remove(self._pk.samtools_stats_file_name)
-        self._samtools_stats = subprocess.getoutput("samtools stats {}".format(self._pk.samtools_sorted_file_name))
+        Utilities.batch_remove(self._pk.samtools_stats_file_name, self._pk.samtools_stats_log_file_name)
+        self._samtools_stats = subprocess.getoutput("samtools stats {a} 2> {b}".format(a=self._pk.samtools_sorted_file_name,
+                                                                                       b=self._pk.samtools_stats_log_file_name))
         Utilities.dump_string(string=self._samtools_stats, file=self._pk.samtools_stats_file_name)
-        logging.info("Total coverage statistics: '{}'".format(self._pk.samtools_stats_file_name))
+        logging.info("Saved total coverage statistics: '{}'".format(self._pk.samtools_stats_file_name))
 
     def _bam2histogram(self):
-        Utilities.batch_remove(self._pk.bedtools_histogram_file_name)
-        s = subprocess.getoutput("genomeCoverageBed -ibam {}".format(self._pk.samtools_sorted_file_name))
+        Utilities.batch_remove(self._pk.bedtools_histogram_file_name, self._pk.genomeCoverageBed_log_file_name)
+        s = subprocess.getoutput("genomeCoverageBed -ibam {a} 2> {b}".format(a=self._pk.samtools_sorted_file_name,
+                                                                             b=self._pk.genomeCoverageBed_log_file_name))
         Utilities.dump_string(string=s, file=self._pk.bedtools_histogram_file_name)
         self._bedtools_histogram_2d_array = Utilities.string_to_2d_array(s)
         if len(self._bedtools_histogram_2d_array) == 0:
-            Utilities.log_and_raise("Bad alignment: no histogram to save!")
-        logging.info("Coverage histogram data: '{}'".format(self._pk.bedtools_histogram_file_name))
+            logging.critical("Bad alignment: no histogram to save!")
+        logging.info("Saved coverage histogram data: '{}'".format(self._pk.bedtools_histogram_file_name))
 
     def _stack_coverage(self):
         Utilities.batch_remove(self._pk.stacked_coverage_file_name)
@@ -91,7 +93,7 @@ class CoverageExtractor:
                 row_processing_2d_array = []
                 counting_id = reference_id
         if len(stacked_coverages_2d_array) == 0:
-            Utilities.log_and_raise("Bad alignment: no coverage to stack!")
+            logging.critical("Bad alignment: no coverage to stack!")
         self._stacked_coverages_df = pd.DataFrame(stacked_coverages_2d_array, columns=["reference_id",
                                                                                        "id_maximal_coverage_depth",
                                                                                        "id_coverage_breadth",
@@ -104,18 +106,17 @@ class CoverageExtractor:
     def __get_base_alignment_stats(self):
         d = {}
         # SAMTools stats file columns: ID, stat, value, comment
-        for line in Utilities.split_lines(self._samtools_stats):
-            line_list = [i.strip() for i in line.split("\t")]
+        for line_list in Utilities.string_to_2d_array(self._samtools_stats):
             if len(line_list) < 3 or line_list[0] != "SN":
                 continue
             d[re.sub(":$", "", line_list[1])] = line_list[2]
         if len(d) == 0:
-            Utilities.log_and_raise("Bad alignment: no SAMTools stats to extract!")
+            logging.critical("Bad alignment: no SAMTools stats to extract!")
         out = {"total_reads": d["raw total sequences"],
                "mapped_reads": d["reads mapped"],
                "total_bp": d["total length"],
                "mapped_bp": d["bases mapped"]}
-        return {"sample_{}".format(k): int(d[k]) for k in out}
+        return {"sample_{}".format(k): int(out[k]) for k in out}
 
     def _reference2statistics(self):
         Utilities.batch_remove(self._pk.final_coverage_file_name)
@@ -150,12 +151,16 @@ class CoverageExtractor:
         logging.info("Extracted coverage table: '{}'".format(self._pk.final_coverage_file_name))
 
     def run(self):
-        functions_list = [self._sam2bam2sorted_bam, self._index_bam, self._bam2idxstats, self._bam2stats, self._bam2histogram, self._stack_coverage, self._reference2statistics]
+        functions_list = [self._sam2bam2sorted_bam,
+                          self._index_bam,
+                          self._bam2idxstats,
+                          self._bam2stats,
+                          self._bam2histogram,
+                          self._stack_coverage,
+                          self._reference2statistics]
         if os.path.isfile(self._pk.samtools_sorted_file_name):
             functions_list = functions_list[1:]
-        elif os.path.isfile(self._pk.samtools_converted_file_name) or os.path.isfile(self._pk.mapped_reads_file_name):
-            pass
-        else:
-            Utilities.log_and_raise("Not recognized input file: '{}'".format(self._pk.mapped_reads_file_name))
-        tmp = [i() for i in functions_list]
-        del tmp
+        elif not (os.path.isfile(self._pk.samtools_converted_file_name) or os.path.isfile(self._pk.mapped_reads_file_name)):
+            logging.critical("Not recognized input file: '{}'".format(self._pk.mapped_reads_file_name))
+        for f in functions_list:
+            f()

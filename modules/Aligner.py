@@ -96,11 +96,9 @@ class Aligner:
 
     def run(self):
         bwt_cmd_string = " ".join(self._get_cmd())
-        pipeline = """
-{a} 2> {b} | \
-samtools view - -bu -@ {c} | \
-samtools sort - -@ {c} -o {d}
-""".format(a=bwt_cmd_string, b=self._pk.aligner_log_file_name, c=self._threads_number, d=self._pk.samtools_sorted_file_name)
+        pipeline = """{a} 2> {b} | \
+        samtools view - -bu -@ {c} | \
+        samtools sort - -@ {c} -o {d}""".format(a=bwt_cmd_string, b=self._pk.aligner_log_file_name, c=self._threads_number, d=self._pk.samtools_sorted_file_name)
         logging.debug("Started alignment pipeline with arguments: '{}'".format(pipeline))
         s = subprocess.getoutput(pipeline)
         logging.info("Completed alignment pipeline with arguments: '{a}' and output:\n{b}\n".format(a=pipeline, b=s))
