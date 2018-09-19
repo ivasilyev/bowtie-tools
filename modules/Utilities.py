@@ -76,6 +76,23 @@ class Utilities:
             raise ValueError("Cannot parse dictionary: keys number is not equal!")
 
     @staticmethod
+    def convert_2d_array_to_json(array: list, key_column: str):
+        header_list = array[0]
+        key_number: header_list.index(key_column)
+        out = {}
+        for i in array:
+            d = {}
+            c = 0
+            for j in i:
+                try:
+                    d[header_list[c]] = j
+                except IndexError:
+                    d[header_list[c]] = ""
+                c += 1
+            out[header_list[key_number]] = d
+        return out
+
+    @staticmethod
     def dump_string(string: str, file: str):
         with open(file=file, mode="w", encoding="utf-8") as f:
             f.write(string)

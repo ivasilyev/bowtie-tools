@@ -6,7 +6,6 @@ import re
 import os
 import subprocess
 import logging
-import pandas as pd
 from modules.Utilities import Utilities
 from modules.PathsKeeper import PathsKeeper
 
@@ -15,10 +14,11 @@ class CoverageExtractor:
     def __init__(self, paths_keeper: PathsKeeper, non_zero_bool: bool = False):
         self._non_zero_bool = non_zero_bool
         self._pk = paths_keeper
-        self._samtools_idxstats_df = pd.DataFrame()
+        self._samtools_idxstats_2d_array = [["reference_id", "id_bp", "id_mapped_reads", "id_unmapped_reads"]]
         self._samtools_stats_dict = {}
         self._bedtools_histogram_2d_array = []
-        self._stacked_coverages_df = pd.DataFrame()
+        self._stacked_coverages_2d_array = [["reference_id", "id_maximal_coverage_depth", "id_coverage_breadth", "id_bp", "id_coverage_breadth_to_id_bp", "id_mapped_bp"]]
+
 
     def _sam2bam2sorted_bam(self):
         Utilities.batch_remove(self._pk.samtools_sorted_file_name, self._pk.samtools_converted_log_file_name)
@@ -28,22 +28,19 @@ class CoverageExtractor:
                                                                       b=self._pk.samtools_sorted_file_name))
         Utilities.dump_string(string=s, file=self._pk.samtools_converted_log_file_name)
         logging.info("Sorted SAM file: '{}'".format(self._pk.samtools_sorted_file_name))
-        del s
 
     def _index_bam(self):
         Utilities.batch_remove(self._pk.samtools_index_file_name, self._pk.samtools_index_log_file_name)
         s = subprocess.getoutput("samtools index {}".format(self._pk.samtools_sorted_file_name))
         Utilities.dump_string(string=s, file=self._pk.samtools_index_log_file_name)
         logging.info("Indexed BAM file: '{}'".format(self._pk.samtools_index_file_name))
-        del s
 
     def _bam2idxstats(self):
         Utilities.batch_remove(self._pk.samtools_idxstats_file_name, self._pk.samtools_idxstats_log_file_name)
         s = subprocess.getoutput("samtools idxstats {a} 2> {b}".format(a=self._pk.samtools_sorted_file_name, b=self._pk.samtools_idxstats_log_file_name))
         Utilities.dump_string(string=s, file=self._pk.samtools_idxstats_file_name)
         logging.info("Saved SAMTools mapped reads statistics: '{}'".format(self._pk.samtools_idxstats_file_name))
-        self._samtools_idxstats_df = pd.DataFrame(Utilities.string_to_2d_array(s), columns=["reference_id", "id_bp", "id_mapped_reads", "id_unmapped_reads"])
-        del s
+        self._samtools_idxstats_2d_array.extend(Utilities.string_to_2d_array(s))
 
     def _bam2stats(self):
         def __get_base_alignment_stats(string: str):
@@ -66,7 +63,6 @@ class CoverageExtractor:
         Utilities.dump_string(string=s, file=self._pk.samtools_stats_file_name)
         logging.info("Saved SAMTools total coverage statistics: '{}'".format(self._pk.samtools_stats_file_name))
         self._samtools_stats_dict = __get_base_alignment_stats(s)
-        del s
 
     def _bam2histogram(self):
         Utilities.batch_remove(self._pk.bedtools_histogram_file_name, self._pk.genomeCoverageBed_log_file_name)
@@ -76,12 +72,10 @@ class CoverageExtractor:
         if len(self._bedtools_histogram_2d_array) == 0:
             logging.critical("Bad alignment: no BEDTools coverage histogram to save!")
         logging.info("Saved BEDTools coverage histogram data: '{}'".format(self._pk.bedtools_histogram_file_name))
-        del s
 
     def _stack_coverage(self):
         Utilities.batch_remove(self._pk.stacked_coverage_file_name)
         # genomecov file columns: reference sequence name, depth of coverage, breadth of coverage with that depth, sequence length, coverage ratio
-        stacked_coverages_2d_array = []
         row_processing_2d_array = []
         counting_id = ""
         for row_list in self._bedtools_histogram_2d_array:
@@ -101,61 +95,64 @@ class CoverageExtractor:
                     id_bp = int(row_processing_2d_array[0][3])
                     id_coverage_breadth_to_id_bp = sum([float(i[4]) for i in row_processing_2d_array])
                     id_mapped_bp = sum([int(i[1]) * int(i[2]) for i in row_processing_2d_array])
-                    stacked_coverages_2d_array.append([counting_id,
-                                                       id_maximal_coverage_depth,
-                                                       id_coverage_breadth,
-                                                       id_bp,
-                                                       id_coverage_breadth_to_id_bp,
-                                                       id_mapped_bp])
+                    self._stacked_coverages_2d_array.append([counting_id,
+                                                            id_maximal_coverage_depth,
+                                                            id_coverage_breadth,
+                                                            id_bp,
+                                                            id_coverage_breadth_to_id_bp,
+                                                            id_mapped_bp])
                 row_processing_2d_array = []
                 counting_id = reference_id
-        if len(stacked_coverages_2d_array) == 0:
+        if len(self._stacked_coverages_2d_array) == 1:
             logging.critical("Bad alignment: no coverage to stack!")
             return
-        self._stacked_coverages_df = pd.DataFrame(stacked_coverages_2d_array, columns=["reference_id",
-                                                                                       "id_maximal_coverage_depth",
-                                                                                       "id_coverage_breadth",
-                                                                                       "id_bp",
-                                                                                       "id_coverage_breadth_to_id_bp",
-                                                                                       "id_mapped_bp"])
-        self._stacked_coverages_df.to_csv(self._pk.stacked_coverage_file_name, sep='\t', index=False)
+        Utilities.dump_2d_array(array=self._stacked_coverages_2d_array, file=self._pk.stacked_coverage_file_name)
         logging.info("Stacked BEDTools coverage: '{}'".format(self._pk.stacked_coverage_file_name))
-        del self._bedtools_histogram_2d_array, stacked_coverages_2d_array
 
     def _reference2statistics(self):
         Utilities.batch_remove(self._pk.final_coverage_file_name)
         stats_dict = self._samtools_stats_dict
-        reference_df = pd.read_table(self._pk.bedtools_genome_file, header='infer', sep='\t', names=['reference_id', 'id_bp'])
-        if len(self._stacked_coverages_df) == 0:
-            logging.critical("Bad alignment: empty stacked BEDTools coverage: '{}'".format(self._pk.stacked_coverage_file_name))
-            return
-        genomes_coverages_df = pd.merge(reference_df, self._stacked_coverages_df.loc[:, [i for i in list(self._stacked_coverages_df) if i != "id_bp"]], on="reference_id", how="left")
-        del self._stacked_coverages_df, reference_df
-        genomes_coverages_df = genomes_coverages_df.loc[genomes_coverages_df['reference_id'] != 'genome']
-        genomes_coverages_df["id_total_relative_abundance"] = genomes_coverages_df.loc[:, "id_mapped_bp"] / (genomes_coverages_df.loc[:, "id_bp"] * stats_dict["sample_total_bp"])
-        genomes_coverages_df["id_mapped_relative_abundance"] = genomes_coverages_df.loc[:, "id_mapped_bp"] / (genomes_coverages_df.loc[:, "id_bp"] * stats_dict["sample_mapped_bp"])
-        genomes_coverages_df["sample_total_reads"] = stats_dict["sample_total_reads"]
-        genomes_coverages_df["sample_mapped_reads"] = stats_dict["sample_mapped_reads"]
-        genomes_coverages_df["sample_total_bp"] = stats_dict["sample_total_bp"]
-        genomes_coverages_df["sample_mapped_bp"] = stats_dict["sample_mapped_bp"]
-        genomes_coverages_df["sample_average_total_reads_bp"] = float(stats_dict["sample_total_reads"]) / float(stats_dict["sample_total_bp"])
-        genomes_coverages_df["sample_average_mapped_reads_bp"] = float(stats_dict["sample_mapped_reads"]) / float(stats_dict["sample_total_bp"])
-        genomes_coverages_df["sample_mapped_reads_to_total_reads"] = float(stats_dict["sample_mapped_reads"]) / float(stats_dict["sample_total_reads"])
-        genomes_coverages_df = pd.merge(genomes_coverages_df, self._samtools_idxstats_df.loc[:, [i for i in list(self._samtools_idxstats_df) if i != "id_bp"]], on="reference_id", how="left")
-        del self._samtools_idxstats_df
-        genomes_coverages_df["id_mapped_reads_per_million_sample_total_reads"] = genomes_coverages_df.loc[:, "id_mapped_reads"] * (10 ** 6) / float(stats_dict["sample_total_reads"])
-        genomes_coverages_df["id_mapped_reads_per_million_sample_mapped_reads"] = genomes_coverages_df.loc[:, "id_mapped_reads"] * (10 ** 6) / float(stats_dict["sample_mapped_reads"])
-        output_df = genomes_coverages_df.loc[:, ["reference_id", "id_bp", "id_coverage_breadth", "id_mapped_bp", "id_coverage_breadth_to_id_bp", "id_maximal_coverage_depth", "id_total_relative_abundance", "id_mapped_relative_abundance", "id_mapped_reads", "sample_total_reads", "sample_mapped_reads", "sample_total_bp", "sample_mapped_bp", "sample_average_total_reads_bp", "sample_average_mapped_reads_bp", "sample_mapped_reads_to_total_reads", "id_mapped_reads_per_million_sample_total_reads", "id_mapped_reads_per_million_sample_mapped_reads"]]
-        if self._non_zero_bool:
-            output_df = output_df[output_df.id_coverage_breadth.notnull()]
-        else:
-            output_df = output_df.fillna(0)
-        for int_column in ["id_bp", "id_coverage_breadth", "id_mapped_bp", "id_maximal_coverage_depth", "id_mapped_reads", "sample_total_reads", "sample_mapped_reads", "sample_total_bp", "sample_mapped_bp"]:
-            output_df[int_column] = output_df.loc[:, int_column].astype(int)
-        output_df = output_df.loc[~output_df['reference_id'].str.contains('*', regex=False)]
-        output_df.to_csv(self._pk.final_coverage_file_name, sep='\t', index=False)
-        logging.info("Finished processing coverage table: '{}'".format(self._pk.final_coverage_file_name))
-        del output_df
+        header = ["reference_id", "id_bp", "id_coverage_breadth", "id_mapped_bp", "id_coverage_breadth_to_id_bp", "id_maximal_coverage_depth", "id_total_relative_abundance", "id_mapped_relative_abundance", "id_mapped_reads", "sample_total_reads", "sample_mapped_reads", "sample_total_bp", "sample_mapped_bp", "sample_average_total_reads_bp", "sample_average_mapped_reads_bp", "sample_mapped_reads_to_total_reads", "id_mapped_reads_per_million_sample_total_reads", "id_mapped_reads_per_million_sample_mapped_reads"]
+        reference_dicts_json = Utilities.convert_2d_array_to_json(array=Utilities.load_2d_array(self._pk.bedtools_genome_file), key_column="reference_id")
+        stacked_coverages_json = Utilities.convert_2d_array_to_json(array=self._stacked_coverages_2d_array, key_column="reference_id")
+        del self._pk.bedtools_genome_file, self._stacked_coverages_2d_array
+
+
+
+
+
+
+        # reference_df = pd.read_table(self._pk.bedtools_genome_file, header='infer', sep='\t', names=['reference_id', 'id_bp'])
+        # if len(self._stacked_coverages_df) == 0:
+        #     logging.critical("Bad alignment: empty stacked BEDTools coverage: '{}'".format(self._pk.stacked_coverage_file_name))
+        #     return
+        # genomes_coverages_df = pd.merge(reference_df, self._stacked_coverages_df.loc[:, [i for i in list(self._stacked_coverages_df) if i != "id_bp"]], on="reference_id", how="left")
+        # del self._stacked_coverages_df, reference_df
+        # genomes_coverages_df = genomes_coverages_df.loc[genomes_coverages_df['reference_id'] != 'genome']
+        # genomes_coverages_df["id_total_relative_abundance"] = genomes_coverages_df.loc[:, "id_mapped_bp"] / (genomes_coverages_df.loc[:, "id_bp"] * stats_dict["sample_total_bp"])
+        # genomes_coverages_df["id_mapped_relative_abundance"] = genomes_coverages_df.loc[:, "id_mapped_bp"] / (genomes_coverages_df.loc[:, "id_bp"] * stats_dict["sample_mapped_bp"])
+        # genomes_coverages_df["sample_total_reads"] = stats_dict["sample_total_reads"]
+        # genomes_coverages_df["sample_mapped_reads"] = stats_dict["sample_mapped_reads"]
+        # genomes_coverages_df["sample_total_bp"] = stats_dict["sample_total_bp"]
+        # genomes_coverages_df["sample_mapped_bp"] = stats_dict["sample_mapped_bp"]
+        # genomes_coverages_df["sample_average_total_reads_bp"] = float(stats_dict["sample_total_reads"]) / float(stats_dict["sample_total_bp"])
+        # genomes_coverages_df["sample_average_mapped_reads_bp"] = float(stats_dict["sample_mapped_reads"]) / float(stats_dict["sample_total_bp"])
+        # genomes_coverages_df["sample_mapped_reads_to_total_reads"] = float(stats_dict["sample_mapped_reads"]) / float(stats_dict["sample_total_reads"])
+        # genomes_coverages_df = pd.merge(genomes_coverages_df, self._samtools_idxstats_df.loc[:, [i for i in list(self._samtools_idxstats_df) if i != "id_bp"]], on="reference_id", how="left")
+        # del self._samtools_idxstats_df
+        # genomes_coverages_df["id_mapped_reads_per_million_sample_total_reads"] = genomes_coverages_df.loc[:, "id_mapped_reads"] * (10 ** 6) / float(stats_dict["sample_total_reads"])
+        # genomes_coverages_df["id_mapped_reads_per_million_sample_mapped_reads"] = genomes_coverages_df.loc[:, "id_mapped_reads"] * (10 ** 6) / float(stats_dict["sample_mapped_reads"])
+        # output_df = genomes_coverages_df.loc[:, ["reference_id", "id_bp", "id_coverage_breadth", "id_mapped_bp", "id_coverage_breadth_to_id_bp", "id_maximal_coverage_depth", "id_total_relative_abundance", "id_mapped_relative_abundance", "id_mapped_reads", "sample_total_reads", "sample_mapped_reads", "sample_total_bp", "sample_mapped_bp", "sample_average_total_reads_bp", "sample_average_mapped_reads_bp", "sample_mapped_reads_to_total_reads", "id_mapped_reads_per_million_sample_total_reads", "id_mapped_reads_per_million_sample_mapped_reads"]]
+        # if self._non_zero_bool:
+        #     output_df = output_df[output_df.id_coverage_breadth.notnull()]
+        # else:
+        #     output_df = output_df.fillna(0)
+        # for int_column in ["id_bp", "id_coverage_breadth", "id_mapped_bp", "id_maximal_coverage_depth", "id_mapped_reads", "sample_total_reads", "sample_mapped_reads", "sample_total_bp", "sample_mapped_bp"]:
+        #     output_df[int_column] = output_df.loc[:, int_column].astype(int)
+        # output_df = output_df.loc[~output_df['reference_id'].str.contains('*', regex=False)]
+        # output_df.to_csv(self._pk.final_coverage_file_name, sep='\t', index=False)
+        # logging.info("Finished processing coverage table: '{}'".format(self._pk.final_coverage_file_name))
+        # del output_df
 
     def run(self):
         functions_list = [self._sam2bam2sorted_bam,
