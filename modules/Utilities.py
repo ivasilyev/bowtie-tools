@@ -54,8 +54,26 @@ class Utilities:
         return Utilities.remove_empty_values([[j.strip() for j in i.split("\t")] for i in Utilities.split_lines(string)])
 
     @staticmethod
+    def _2d_array_to_dicts_list(arr: list, names: list):
+        if len(arr[0]) != len(names):
+            raise ValueError("Cannot parse dictionary: keys number is not equal!")
+        out = []
+        for row_list in arr:
+            counter = 0
+            while counter < len(row_list):
+                out.append({names[counter]: row_list[counter]})
+                counter += 1
+        return [[j for j in i] for i in arr]
+
+    @staticmethod
     def load_2d_array(file: str):
         return Utilities.string_to_2d_array(Utilities.load_string(file))
+
+    @staticmethod
+    def load_dicts_list(file: str, names: list):
+        arr = Utilities.load_2d_array(file)
+        if len(arr[0]) != len(names):
+            raise ValueError("Cannot parse dictionary: keys number is not equal!")
 
     @staticmethod
     def dump_string(string: str, file: str):
