@@ -109,6 +109,37 @@ class CoverageExtractor:
         Utilities.dump_2d_array(array=self._stacked_coverages_2d_array, file=self._pk.stacked_coverage_file_name)
         logging.info("Stacked BEDTools coverage: '{}'".format(self._pk.stacked_coverage_file_name))
 
+    @staticmethod
+    def gkfd(key: str, d: dict, type_):
+        v = d.get(key)
+        if not v:
+            v = "0"
+        try:
+            out = type_(v)
+        except ValueError:
+            out = type_(0)
+        return out
+
+    def __process_row_json(self, row_json: dict):
+        row_json["id_mapped_bp"] = self.gkfd("id_mapped_bp", row_json, int)
+        row_json["id_bp"] = self.gkfd("id_bp", row_json, int)
+        row_json["id_total_relative_abundance"] = row_json["id_mapped_bp"] / (row_json["id_bp"] * self.gkfd("sample_total_bp", row_json, int))
+        row_json["id_mapped_relative_abundance"] = row_json["id_mapped_bp"] / (row_json["id_bp"] * self.gkfd("sample_mapped_bp", row_json, int))
+        row_json["sample_total_reads"] = self.gkfd("sample_total_reads", self._samtools_stats_dict, int)
+        row_json["sample_mapped_reads"] = self.gkfd("sample_mapped_reads", self._samtools_stats_dict, int)
+        row_json["sample_total_bp"] = self.gkfd("sample_total_bp", self._samtools_stats_dict, int)
+        row_json["sample_mapped_bp"] = self.gkfd("sample_mapped_bp", self._samtools_stats_dict, int)
+        row_json["sample_average_total_reads_bp"] = float(row_json["sample_total_reads"]) / float(row_json["sample_total_bp"])
+        row_json["sample_average_mapped_reads_bp"] = float(row_json["sample_mapped_reads"]) / float(row_json["sample_total_bp"])
+        row_json["sample_mapped_reads_to_total_reads"] = float(row_json["sample_mapped_reads"]) / float(row_json["sample_total_reads"])
+        
+        
+        # genomes_coverages_df = pd.merge(genomes_coverages_df, self._samtools_idxstats_df.loc[:, [i for i in list(self._samtools_idxstats_df) if i != "id_bp"]], on="reference_id", how="left")
+        # del self._samtools_idxstats_df
+        # genomes_coverages_df["id_mapped_reads_per_million_sample_total_reads"] = genomes_coverages_df.loc[:, "id_mapped_reads"] * (10 ** 6) / float(stats_dict["sample_total_reads"])
+        # genomes_coverages_df["id_mapped_reads_per_million_sample_mapped_reads"] = genomes_coverages_df.loc[:, "id_mapped_reads"] * (10 ** 6) / float(stats_dict["sample_mapped_reads"])
+        # output_df = genomes_coverages_df.loc[:, ["reference_id", "id_bp", "id_coverage_breadth", "id_mapped_bp", "id_coverage_breadth_to_id_bp", "id_maximal_coverage_depth", "id_total_relative_abundance", "id_mapped_relative_abundance", "id_mapped_reads", "sample_total_reads", "sample_mapped_reads", "sample_total_bp", "sample_mapped_bp", "sample_average_total_reads_bp", "sample_average_mapped_reads_bp", "sample_mapped_reads_to_total_reads", "id_mapped_reads_per_million_sample_total_reads", "id_mapped_reads_per_million_sample_mapped_reads"]]
+
     def _reference2statistics(self):
         Utilities.batch_remove(self._pk.final_coverage_file_name)
         stats_dict = self._samtools_stats_dict
@@ -116,7 +147,10 @@ class CoverageExtractor:
         reference_dicts_json = Utilities.convert_2d_array_to_json(array=Utilities.load_2d_array(self._pk.bedtools_genome_file), key_column="reference_id")
         stacked_coverages_json = Utilities.convert_2d_array_to_json(array=self._stacked_coverages_2d_array, key_column="reference_id")
         del self._pk.bedtools_genome_file, self._stacked_coverages_2d_array
-
+        genomes_coverages_json = Utilities.merge_jsons(reference_dicts_json, stacked_coverages_json)
+        del reference_dicts_json, stacked_coverages_json
+        genomes_coverages_json.pop("genome")
+        genomes_coverages_json.pop("*")
 
 
 
@@ -129,6 +163,7 @@ class CoverageExtractor:
         # genomes_coverages_df = pd.merge(reference_df, self._stacked_coverages_df.loc[:, [i for i in list(self._stacked_coverages_df) if i != "id_bp"]], on="reference_id", how="left")
         # del self._stacked_coverages_df, reference_df
         # genomes_coverages_df = genomes_coverages_df.loc[genomes_coverages_df['reference_id'] != 'genome']
+
         # genomes_coverages_df["id_total_relative_abundance"] = genomes_coverages_df.loc[:, "id_mapped_bp"] / (genomes_coverages_df.loc[:, "id_bp"] * stats_dict["sample_total_bp"])
         # genomes_coverages_df["id_mapped_relative_abundance"] = genomes_coverages_df.loc[:, "id_mapped_bp"] / (genomes_coverages_df.loc[:, "id_bp"] * stats_dict["sample_mapped_bp"])
         # genomes_coverages_df["sample_total_reads"] = stats_dict["sample_total_reads"]

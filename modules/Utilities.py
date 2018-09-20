@@ -93,6 +93,18 @@ class Utilities:
         return out
 
     @staticmethod
+    def merge_jsons(*args):
+        out = {}
+        for _json in args:
+            for key in _json:
+                d = out.get(key)
+                if not d:
+                    out[key] = _json[key]
+                else:
+                    out[key].update(_json[key])
+        return out
+
+    @staticmethod
     def dump_string(string: str, file: str):
         with open(file=file, mode="w", encoding="utf-8") as f:
             f.write(string)
