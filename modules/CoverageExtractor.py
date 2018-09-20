@@ -4,6 +4,7 @@
 
 import re
 import os
+import gc
 import subprocess
 import logging
 import pandas as pd
@@ -121,6 +122,7 @@ class CoverageExtractor:
         self._stacked_coverages_df.to_csv(self._pk.stacked_coverage_file_name, sep='\t', index=True)
         logging.info("Stacked BEDTools coverage: '{}'".format(self._pk.stacked_coverage_file_name))
         del self._bedtools_histogram_2d_array, stacked_coverages_2d_array
+        gc.collect()
 
     def _reference2statistics(self):
         Utilities.batch_remove(self._pk.final_coverage_file_name)
@@ -131,6 +133,7 @@ class CoverageExtractor:
             return
         genomes_coverages_df = pd.concat([reference_df, self._stacked_coverages_df.loc[:, [i for i in list(self._stacked_coverages_df) if i != "id_bp"]]], axis=1, join="outer")
         del self._stacked_coverages_df, reference_df
+        gc.collect()
         try:
             genomes_coverages_df.drop("genome", axis=0)
             genomes_coverages_df.drop("*", axis=0)
@@ -147,6 +150,7 @@ class CoverageExtractor:
         genomes_coverages_df["sample_mapped_reads_to_total_reads"] = float(stats_dict["sample_mapped_reads"]) / float(stats_dict["sample_total_reads"])
         genomes_coverages_df = pd.concat([genomes_coverages_df, self._samtools_idxstats_df.loc[:, [i for i in list(self._samtools_idxstats_df) if i != "id_bp"]]], axis=1, join="outer")
         del self._samtools_idxstats_df
+        gc.collect()
         genomes_coverages_df["id_mapped_reads_per_million_sample_total_reads"] = genomes_coverages_df["id_mapped_reads"] * (10 ** 6) / float(stats_dict["sample_total_reads"])
         genomes_coverages_df["id_mapped_reads_per_million_sample_mapped_reads"] = genomes_coverages_df["id_mapped_reads"] * (10 ** 6) / float(stats_dict["sample_mapped_reads"])
         genomes_coverages_df = genomes_coverages_df.loc[:, ["id_bp", "id_coverage_breadth", "id_mapped_bp", "id_coverage_breadth_to_id_bp", "id_maximal_coverage_depth", "id_total_relative_abundance", "id_mapped_relative_abundance", "id_mapped_reads", "sample_total_reads", "sample_mapped_reads", "sample_total_bp", "sample_mapped_bp", "sample_average_total_reads_bp", "sample_average_mapped_reads_bp", "sample_mapped_reads_to_total_reads", "id_mapped_reads_per_million_sample_total_reads", "id_mapped_reads_per_million_sample_mapped_reads"]]
@@ -159,6 +163,7 @@ class CoverageExtractor:
         genomes_coverages_df.to_csv(self._pk.final_coverage_file_name, sep='\t', index=True)
         logging.info("Finished processing coverage table: '{}'".format(self._pk.final_coverage_file_name))
         del genomes_coverages_df
+        gc.collect()
 
     def run(self):
         functions_list = [self._sam2bam2sorted_bam,
