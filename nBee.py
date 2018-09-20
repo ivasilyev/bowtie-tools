@@ -92,7 +92,7 @@ class PipelineHandler:
     def run(self):
         Utilities.single_core_queue(func=self._run_aligner, queue=sampleFilesList)
         if not mainInitializer.no_coverage_bool:
-            Utilities.multi_core_queue(func=self._run_extractor, queue=sampleFilesList)
+            Utilities.single_core_queue(func=self._run_extractor, queue=sampleFilesList)
 
 
 class ChunksHandler:
