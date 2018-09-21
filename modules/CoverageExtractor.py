@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-
 import re
 import os
 import gc
@@ -24,6 +23,7 @@ class CoverageExtractor:
 
     def _sam2bam2sorted_bam(self):
         Utilities.batch_remove(self._pk.samtools_sorted_file_name, self._pk.samtools_converted_log_file_name)
+        # SamTools details: http://www.htslib.org/doc/samtools.html
         # Avoiding self._pk.samtools_converted_file_name
         s = subprocess.getoutput("samtools view -bu -@ 1 {a} | \
                                   samtools sort - -o -@ 1 {b}".format(a=self._pk.mapped_reads_file_name,
@@ -44,13 +44,16 @@ class CoverageExtractor:
         s = subprocess.getoutput("samtools idxstats {a} 2> {b}".format(a=self._pk.samtools_sorted_file_name, b=self._pk.samtools_idxstats_log_file_name))
         Utilities.dump_string(string=s, file=self._pk.samtools_idxstats_file_name)
         logging.info("Saved SAMTools mapped reads statistics: '{}'".format(self._pk.samtools_idxstats_file_name))
-        self._samtools_idxstats_df = pd.DataFrame(Utilities.string_to_2d_array(s), columns=[self._index_column, "id_bp", "id_mapped_reads", "id_unmapped_reads"])
+        self._samtools_idxstats_df = pd.DataFrame(Utilities.string_to_2d_array(s), columns=[self._index_column,
+                                                                                            "id_bp",
+                                                                                            "id_mapped_reads",
+                                                                                            "id_unmapped_reads"])
         del s
 
     def _bam2stats(self):
         def __get_base_alignment_stats(string: str):
             d = {}
-            # SAMTools stats file columns: ID, stat, value, comment
+            # SamTools stats file columns: ID, stat, value, comment
             for line_list in Utilities.string_to_2d_array(string):
                 if len(line_list) < 3 or line_list[0] != "SN":
                     continue
@@ -73,6 +76,8 @@ class CoverageExtractor:
     def _bam2histogram(self):
         Utilities.batch_remove(self._pk.bedtools_histogram_file_name, self._pk.genomeCoverageBed_log_file_name)
         s = subprocess.getoutput("genomeCoverageBed -ibam {a} 2> {b}".format(a=self._pk.samtools_sorted_file_name, b=self._pk.genomeCoverageBed_log_file_name))
+        # GenomeCoverageBed details: https://bedtools.readthedocs.io/en/stable/content/tools/genomecov.html
+        # Cannot be converted to DataFrame before stacking
         Utilities.dump_string(string=s, file=self._pk.bedtools_histogram_file_name)
         self._bedtools_histogram_2d_array = Utilities.string_to_2d_array(s)
         if len(self._bedtools_histogram_2d_array) == 0:
@@ -157,7 +162,6 @@ class CoverageExtractor:
             genomes_coverages_df["id_mapped_reads_per_kbp_per_million_sample_total_reads"] = genomes_coverages_df["id_mapped_reads"].astype(int) * (10 ** 9) / (int(stats_dict["sample_total_reads"]) * genomes_coverages_df["id_bp"])
             genomes_coverages_df["id_mapped_reads_per_kbp_per_million_sample_mapped_reads"] = genomes_coverages_df["id_mapped_reads"].astype(int) * (10 ** 9) / (int(stats_dict["sample_mapped_reads"]) * genomes_coverages_df["id_bp"])
             # RPKM details: https://www.biostars.org/p/273537/
-            # genomes_coverages_df = genomes_coverages_df.loc[:, [self._index_column, "id_bp", "id_coverage_breadth", "id_mapped_bp", "id_coverage_breadth_to_id_bp", "id_maximal_coverage_depth", "id_total_relative_abundance", "id_mapped_relative_abundance", "id_mapped_reads", "sample_total_reads", "sample_mapped_reads", "sample_total_bp", "sample_mapped_bp", "sample_average_total_reads_bp", "sample_average_mapped_reads_bp", "sample_mapped_reads_to_total_reads", "id_mapped_reads_per_million_sample_total_reads", "id_mapped_reads_per_million_sample_mapped_reads"]]
             for int_column in ["id_bp", "id_coverage_breadth", "id_mapped_bp", "id_maximal_coverage_depth",
                                "id_mapped_reads", "sample_total_reads", "sample_mapped_reads", "sample_total_bp",
                                "sample_mapped_bp"]:
