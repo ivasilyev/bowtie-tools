@@ -140,8 +140,9 @@ class CoverageExtractor:
                 genomes_coverages_df = genomes_coverages_df[genomes_coverages_df.id_coverage_breadth.notnull()]
             else:
                 genomes_coverages_df = genomes_coverages_df.fillna(0)
-            genomes_coverages_df["id_total_relative_abundance"] = genomes_coverages_df["id_mapped_bp"].astype(int) / genomes_coverages_df["id_bp"].astype(int) * int(stats_dict["sample_total_bp"])
-            genomes_coverages_df["id_mapped_relative_abundance"] = genomes_coverages_df["id_mapped_bp"].astype(int) / genomes_coverages_df["id_bp"].astype(int) * int(stats_dict["sample_mapped_bp"])
+            genomes_coverages_df["id_total_relative_abundance"] = (10 ** 12) * genomes_coverages_df["id_mapped_bp"].astype(int) / (genomes_coverages_df["id_bp"].astype(int) * int(stats_dict["sample_total_bp"]))
+            genomes_coverages_df["id_mapped_relative_abundance"] = (10 ** 12) * genomes_coverages_df["id_mapped_bp"].astype(int) / (genomes_coverages_df["id_bp"].astype(int) * int(stats_dict["sample_mapped_bp"]))
+            # MRA details: http://www.ibmc.msk.ru/content/thesisDocs/TyakhtAV_thesis.pdf (p.63)
             genomes_coverages_df["sample_total_reads"] = stats_dict["sample_total_reads"]
             genomes_coverages_df["sample_mapped_reads"] = stats_dict["sample_mapped_reads"]
             genomes_coverages_df["sample_total_bp"] = stats_dict["sample_total_bp"]
@@ -150,10 +151,16 @@ class CoverageExtractor:
             genomes_coverages_df["sample_average_mapped_reads_bp"] = float(stats_dict["sample_mapped_reads"]) / float(stats_dict["sample_total_bp"])
             genomes_coverages_df["sample_mapped_reads_to_total_reads"] = float(stats_dict["sample_mapped_reads"]) / float(stats_dict["sample_total_reads"])
             genomes_coverages_df = genomes_coverages_df.merge(self._samtools_idxstats_df.loc[:, [self._index_column] + [i for i in list(self._samtools_idxstats_df) if i not in list(genomes_coverages_df)]], on=self._index_column, how="left")
-            genomes_coverages_df["id_mapped_reads_per_million_sample_total_reads"] = genomes_coverages_df["id_mapped_reads"].astype(float) * (10 ** 6) / float(stats_dict["sample_total_reads"])
-            genomes_coverages_df["id_mapped_reads_per_million_sample_mapped_reads"] = genomes_coverages_df["id_mapped_reads"].astype(float) * (10 ** 6) / float(stats_dict["sample_mapped_reads"])
-            genomes_coverages_df = genomes_coverages_df.loc[:, [self._index_column, "id_bp", "id_coverage_breadth", "id_mapped_bp", "id_coverage_breadth_to_id_bp", "id_maximal_coverage_depth", "id_total_relative_abundance", "id_mapped_relative_abundance", "id_mapped_reads", "sample_total_reads", "sample_mapped_reads", "sample_total_bp", "sample_mapped_bp", "sample_average_total_reads_bp", "sample_average_mapped_reads_bp", "sample_mapped_reads_to_total_reads", "id_mapped_reads_per_million_sample_total_reads", "id_mapped_reads_per_million_sample_mapped_reads"]]
-            for int_column in ["id_bp", "id_coverage_breadth", "id_mapped_bp", "id_maximal_coverage_depth", "id_mapped_reads", "sample_total_reads", "sample_mapped_reads", "sample_total_bp", "sample_mapped_bp"]:
+            genomes_coverages_df["id_mapped_reads_per_million_sample_total_reads"] = genomes_coverages_df["id_mapped_reads"].astype(int) * (10 ** 6) / int(stats_dict["sample_total_reads"])
+            genomes_coverages_df["id_mapped_reads_per_million_sample_mapped_reads"] = genomes_coverages_df["id_mapped_reads"].astype(int) * (10 ** 6) / int(stats_dict["sample_mapped_reads"])
+            # RPM details: https://www.biostars.org/p/273537/
+            genomes_coverages_df["id_mapped_reads_per_kbp_per_million_sample_total_reads"] = genomes_coverages_df["id_mapped_reads"].astype(int) * (10 ** 9) / (int(stats_dict["sample_total_reads"]) * genomes_coverages_df["id_bp"])
+            genomes_coverages_df["id_mapped_reads_per_kbp_per_million_sample_mapped_reads"] = genomes_coverages_df["id_mapped_reads"].astype(int) * (10 ** 9) / (int(stats_dict["sample_mapped_reads"]) * genomes_coverages_df["id_bp"])
+            # RPKM details: https://www.biostars.org/p/273537/
+            # genomes_coverages_df = genomes_coverages_df.loc[:, [self._index_column, "id_bp", "id_coverage_breadth", "id_mapped_bp", "id_coverage_breadth_to_id_bp", "id_maximal_coverage_depth", "id_total_relative_abundance", "id_mapped_relative_abundance", "id_mapped_reads", "sample_total_reads", "sample_mapped_reads", "sample_total_bp", "sample_mapped_bp", "sample_average_total_reads_bp", "sample_average_mapped_reads_bp", "sample_mapped_reads_to_total_reads", "id_mapped_reads_per_million_sample_total_reads", "id_mapped_reads_per_million_sample_mapped_reads"]]
+            for int_column in ["id_bp", "id_coverage_breadth", "id_mapped_bp", "id_maximal_coverage_depth",
+                               "id_mapped_reads", "sample_total_reads", "sample_mapped_reads", "sample_total_bp",
+                               "sample_mapped_bp"]:
                 genomes_coverages_df[int_column] = genomes_coverages_df[int_column].astype(int)
             if chunk_number == 0:
                 genomes_coverages_df.to_csv(self._pk.final_coverage_file_name, sep='\t', header=True, index=False)
