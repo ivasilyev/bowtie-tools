@@ -127,43 +127,51 @@ class CoverageExtractor:
     def _reference2statistics(self):
         Utilities.batch_remove(self._pk.final_coverage_file_name)
         stats_dict = self._samtools_stats_dict
-        reference_df = pd.read_table(self._pk.bedtools_genome_file, header='infer', sep='\t', names=['reference_id', 'id_bp']).set_index("reference_id").sort_index()
         if len(self._stacked_coverages_df) == 0:
-            logging.critical(reference_df, "Bad alignment: empty stacked BEDTools coverage: '{}'".format(self._pk.stacked_coverage_file_name))
+            logging.critical("Bad alignment: empty stacked BEDTools coverage: '{}'".format(self._pk.stacked_coverage_file_name))
             return
-        genomes_coverages_df = pd.concat([reference_df, self._stacked_coverages_df.loc[:, [i for i in list(self._stacked_coverages_df) if i != "id_bp"]]], axis=1, join="outer")
-        del self._stacked_coverages_df, reference_df
-        gc.collect()
-        try:
-            genomes_coverages_df.drop("genome", axis=0)
-            genomes_coverages_df.drop("*", axis=0)
-        except KeyError:
-            pass
-        genomes_coverages_df["id_total_relative_abundance"] = genomes_coverages_df["id_mapped_bp"] / (genomes_coverages_df["id_bp"] * stats_dict["sample_total_bp"])
-        genomes_coverages_df["id_mapped_relative_abundance"] = genomes_coverages_df["id_mapped_bp"] / (genomes_coverages_df["id_bp"] * stats_dict["sample_mapped_bp"])
-        genomes_coverages_df["sample_total_reads"] = stats_dict["sample_total_reads"]
-        genomes_coverages_df["sample_mapped_reads"] = stats_dict["sample_mapped_reads"]
-        genomes_coverages_df["sample_total_bp"] = stats_dict["sample_total_bp"]
-        genomes_coverages_df["sample_mapped_bp"] = stats_dict["sample_mapped_bp"]
-        genomes_coverages_df["sample_average_total_reads_bp"] = float(stats_dict["sample_total_reads"]) / float(stats_dict["sample_total_bp"])
-        genomes_coverages_df["sample_average_mapped_reads_bp"] = float(stats_dict["sample_mapped_reads"]) / float(stats_dict["sample_total_bp"])
-        genomes_coverages_df["sample_mapped_reads_to_total_reads"] = float(stats_dict["sample_mapped_reads"]) / float(stats_dict["sample_total_reads"])
-        genomes_coverages_df = pd.concat([genomes_coverages_df, self._samtools_idxstats_df.loc[:, [i for i in list(self._samtools_idxstats_df) if i != "id_bp"]]], axis=1, join="outer")
-        del self._samtools_idxstats_df
-        gc.collect()
-        genomes_coverages_df["id_mapped_reads_per_million_sample_total_reads"] = genomes_coverages_df["id_mapped_reads"] * (10 ** 6) / float(stats_dict["sample_total_reads"])
-        genomes_coverages_df["id_mapped_reads_per_million_sample_mapped_reads"] = genomes_coverages_df["id_mapped_reads"] * (10 ** 6) / float(stats_dict["sample_mapped_reads"])
-        genomes_coverages_df = genomes_coverages_df.loc[:, ["id_bp", "id_coverage_breadth", "id_mapped_bp", "id_coverage_breadth_to_id_bp", "id_maximal_coverage_depth", "id_total_relative_abundance", "id_mapped_relative_abundance", "id_mapped_reads", "sample_total_reads", "sample_mapped_reads", "sample_total_bp", "sample_mapped_bp", "sample_average_total_reads_bp", "sample_average_mapped_reads_bp", "sample_mapped_reads_to_total_reads", "id_mapped_reads_per_million_sample_total_reads", "id_mapped_reads_per_million_sample_mapped_reads"]]
-        if self._non_zero_bool:
-            genomes_coverages_df = genomes_coverages_df[genomes_coverages_df.id_coverage_breadth.notnull()]
-        else:
-            genomes_coverages_df = genomes_coverages_df.fillna(0)
-        for int_column in ["id_bp", "id_coverage_breadth", "id_mapped_bp", "id_maximal_coverage_depth", "id_mapped_reads", "sample_total_reads", "sample_mapped_reads", "sample_total_bp", "sample_mapped_bp"]:
-            genomes_coverages_df[int_column] = genomes_coverages_df[int_column].astype(int)
-        genomes_coverages_df.to_csv(self._pk.final_coverage_file_name, sep='\t', index=True)
+        chunk_size = 10 ** 6
+        reader = pd.read_table(self._pk.bedtools_genome_file, sep='\t', header="infer", names=["reference_id", "id_bp"], chunksize=chunk_size)
+        for chunk_number, chunk in enumerate(reader):
+            reference_df = chunk.set_index("reference_id").sort_index()
+            print(reference_df)
+            print("\n\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+            genomes_coverages_df = pd.concat([reference_df, self._stacked_coverages_df.loc[:, [i for i in list(self._stacked_coverages_df) if i not in list(reference_df)]]], axis=1, join="inner")
+            print(genomes_coverages_df)
+            try:
+                genomes_coverages_df.drop("genome", axis=0)
+            except KeyError:
+                pass
+            try:
+                genomes_coverages_df.drop("*", axis=0)
+            except KeyError:
+                pass
+            genomes_coverages_df["id_total_relative_abundance"] = genomes_coverages_df["id_mapped_bp"].astype(int) / genomes_coverages_df["id_bp"].astype(int) * int(stats_dict["sample_total_bp"])
+            genomes_coverages_df["id_mapped_relative_abundance"] = genomes_coverages_df["id_mapped_bp"].astype(int) / genomes_coverages_df["id_bp"].astype(int) * int(stats_dict["sample_mapped_bp"])
+            genomes_coverages_df["sample_total_reads"] = stats_dict["sample_total_reads"]
+            genomes_coverages_df["sample_mapped_reads"] = stats_dict["sample_mapped_reads"]
+            genomes_coverages_df["sample_total_bp"] = stats_dict["sample_total_bp"]
+            genomes_coverages_df["sample_mapped_bp"] = stats_dict["sample_mapped_bp"]
+            genomes_coverages_df["sample_average_total_reads_bp"] = float(stats_dict["sample_total_reads"]) / float(stats_dict["sample_total_bp"])
+            genomes_coverages_df["sample_average_mapped_reads_bp"] = float(stats_dict["sample_mapped_reads"]) / float(stats_dict["sample_total_bp"])
+            genomes_coverages_df["sample_mapped_reads_to_total_reads"] = float(stats_dict["sample_mapped_reads"]) / float(stats_dict["sample_total_reads"])
+            genomes_coverages_df = pd.concat([genomes_coverages_df, self._samtools_idxstats_df.loc[:, [i for i in list(self._samtools_idxstats_df) if i not in list(genomes_coverages_df)]]], axis=1, join="inner")
+            genomes_coverages_df["id_mapped_reads_per_million_sample_total_reads"] = genomes_coverages_df["id_mapped_reads"].astype(float) * (10 ** 6) / float(stats_dict["sample_total_reads"])
+            genomes_coverages_df["id_mapped_reads_per_million_sample_mapped_reads"] = genomes_coverages_df["id_mapped_reads"].astype(float) * (10 ** 6) / float(stats_dict["sample_mapped_reads"])
+            genomes_coverages_df = genomes_coverages_df.loc[:, ["id_bp", "id_coverage_breadth", "id_mapped_bp", "id_coverage_breadth_to_id_bp", "id_maximal_coverage_depth", "id_total_relative_abundance", "id_mapped_relative_abundance", "id_mapped_reads", "sample_total_reads", "sample_mapped_reads", "sample_total_bp", "sample_mapped_bp", "sample_average_total_reads_bp", "sample_average_mapped_reads_bp", "sample_mapped_reads_to_total_reads", "id_mapped_reads_per_million_sample_total_reads", "id_mapped_reads_per_million_sample_mapped_reads"]]
+            if self._non_zero_bool:
+                genomes_coverages_df = genomes_coverages_df[genomes_coverages_df.id_coverage_breadth.notnull()]
+            else:
+                genomes_coverages_df = genomes_coverages_df.fillna(0)
+            for int_column in ["id_bp", "id_coverage_breadth", "id_mapped_bp", "id_maximal_coverage_depth", "id_mapped_reads", "sample_total_reads", "sample_mapped_reads", "sample_total_bp", "sample_mapped_bp"]:
+                genomes_coverages_df[int_column] = genomes_coverages_df[int_column].astype(int)
+            if chunk_number == 0:
+                genomes_coverages_df.to_csv(self._pk.final_coverage_file_name, sep='\t', header=True, index=True)
+            else:
+                with open(file=self._pk.final_coverage_file_name, mode="a", encoding="utf-8") as f:
+                    genomes_coverages_df.to_csv(f, sep='\t', header=False, index=True)
+                logging.info("Processed chunk {} with size of {} lines".format(chunk_number, chunk_size))
         logging.info("Finished processing coverage table: '{}'".format(self._pk.final_coverage_file_name))
-        del genomes_coverages_df
-        gc.collect()
 
     def run(self):
         functions_list = [self._sam2bam2sorted_bam,
