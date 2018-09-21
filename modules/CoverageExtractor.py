@@ -14,6 +14,7 @@ from modules.PathsKeeper import PathsKeeper
 
 class CoverageExtractor:
     def __init__(self, paths_keeper: PathsKeeper, non_zero_bool: bool = False):
+        self._index_column = "reference_id"
         self._non_zero_bool = non_zero_bool
         self._pk = paths_keeper
         self._samtools_idxstats_df = pd.DataFrame()
@@ -43,7 +44,7 @@ class CoverageExtractor:
         s = subprocess.getoutput("samtools idxstats {a} 2> {b}".format(a=self._pk.samtools_sorted_file_name, b=self._pk.samtools_idxstats_log_file_name))
         Utilities.dump_string(string=s, file=self._pk.samtools_idxstats_file_name)
         logging.info("Saved SAMTools mapped reads statistics: '{}'".format(self._pk.samtools_idxstats_file_name))
-        self._samtools_idxstats_df = pd.DataFrame(Utilities.string_to_2d_array(s), columns=["reference_id", "id_bp", "id_mapped_reads", "id_unmapped_reads"]).set_index("reference_id").sort_index()
+        self._samtools_idxstats_df = pd.DataFrame(Utilities.string_to_2d_array(s), columns=[self._index_column, "id_bp", "id_mapped_reads", "id_unmapped_reads"])
         del s
 
     def _bam2stats(self):
@@ -113,13 +114,13 @@ class CoverageExtractor:
         if len(stacked_coverages_2d_array) == 0:
             logging.critical("Bad alignment: no coverage to stack!")
             return
-        self._stacked_coverages_df = pd.DataFrame(stacked_coverages_2d_array, columns=["reference_id",
+        self._stacked_coverages_df = pd.DataFrame(stacked_coverages_2d_array, columns=[self._index_column,
                                                                                        "id_maximal_coverage_depth",
                                                                                        "id_coverage_breadth",
                                                                                        "id_bp",
                                                                                        "id_coverage_breadth_to_id_bp",
-                                                                                       "id_mapped_bp"]).set_index("reference_id").sort_index()
-        self._stacked_coverages_df.to_csv(self._pk.stacked_coverage_file_name, sep='\t', index=True)
+                                                                                       "id_mapped_bp"])
+        self._stacked_coverages_df.to_csv(self._pk.stacked_coverage_file_name, sep='\t', index=False)
         logging.info("Stacked BEDTools coverage: '{}'".format(self._pk.stacked_coverage_file_name))
         del self._bedtools_histogram_2d_array, stacked_coverages_2d_array
         gc.collect()
@@ -131,21 +132,14 @@ class CoverageExtractor:
             logging.critical("Bad alignment: empty stacked BEDTools coverage: '{}'".format(self._pk.stacked_coverage_file_name))
             return
         chunk_size = 10 ** 6
-        reader = pd.read_table(self._pk.bedtools_genome_file, sep='\t', header="infer", names=["reference_id", "id_bp"], chunksize=chunk_size)
-        for chunk_number, chunk in enumerate(reader):
-            reference_df = chunk.set_index("reference_id").sort_index()
-            print(reference_df)
-            print("\n\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-            genomes_coverages_df = pd.concat([reference_df, self._stacked_coverages_df.loc[:, [i for i in list(self._stacked_coverages_df) if i not in list(reference_df)]]], axis=1, join="inner")
-            print(genomes_coverages_df)
-            try:
-                genomes_coverages_df.drop("genome", axis=0)
-            except KeyError:
-                pass
-            try:
-                genomes_coverages_df.drop("*", axis=0)
-            except KeyError:
-                pass
+        reader = pd.read_table(self._pk.bedtools_genome_file, sep='\t', header="infer", names=[self._index_column, "id_bp"], chunksize=chunk_size)
+        for chunk_number, reference_df in enumerate(reader):
+            genomes_coverages_df = reference_df.merge(self._stacked_coverages_df.loc[:, [self._index_column] + [i for i in list(self._stacked_coverages_df) if i not in list(reference_df)]], on=self._index_column, how="left")
+            genomes_coverages_df = genomes_coverages_df[~genomes_coverages_df[self._index_column].isin(["*", "genome"])]
+            if self._non_zero_bool:
+                genomes_coverages_df = genomes_coverages_df[genomes_coverages_df.id_coverage_breadth.notnull()]
+            else:
+                genomes_coverages_df = genomes_coverages_df.fillna(0)
             genomes_coverages_df["id_total_relative_abundance"] = genomes_coverages_df["id_mapped_bp"].astype(int) / genomes_coverages_df["id_bp"].astype(int) * int(stats_dict["sample_total_bp"])
             genomes_coverages_df["id_mapped_relative_abundance"] = genomes_coverages_df["id_mapped_bp"].astype(int) / genomes_coverages_df["id_bp"].astype(int) * int(stats_dict["sample_mapped_bp"])
             genomes_coverages_df["sample_total_reads"] = stats_dict["sample_total_reads"]
@@ -155,21 +149,17 @@ class CoverageExtractor:
             genomes_coverages_df["sample_average_total_reads_bp"] = float(stats_dict["sample_total_reads"]) / float(stats_dict["sample_total_bp"])
             genomes_coverages_df["sample_average_mapped_reads_bp"] = float(stats_dict["sample_mapped_reads"]) / float(stats_dict["sample_total_bp"])
             genomes_coverages_df["sample_mapped_reads_to_total_reads"] = float(stats_dict["sample_mapped_reads"]) / float(stats_dict["sample_total_reads"])
-            genomes_coverages_df = pd.concat([genomes_coverages_df, self._samtools_idxstats_df.loc[:, [i for i in list(self._samtools_idxstats_df) if i not in list(genomes_coverages_df)]]], axis=1, join="inner")
+            genomes_coverages_df = genomes_coverages_df.merge(self._samtools_idxstats_df.loc[:, [self._index_column] + [i for i in list(self._samtools_idxstats_df) if i not in list(genomes_coverages_df)]], on=self._index_column, how="left")
             genomes_coverages_df["id_mapped_reads_per_million_sample_total_reads"] = genomes_coverages_df["id_mapped_reads"].astype(float) * (10 ** 6) / float(stats_dict["sample_total_reads"])
             genomes_coverages_df["id_mapped_reads_per_million_sample_mapped_reads"] = genomes_coverages_df["id_mapped_reads"].astype(float) * (10 ** 6) / float(stats_dict["sample_mapped_reads"])
-            genomes_coverages_df = genomes_coverages_df.loc[:, ["id_bp", "id_coverage_breadth", "id_mapped_bp", "id_coverage_breadth_to_id_bp", "id_maximal_coverage_depth", "id_total_relative_abundance", "id_mapped_relative_abundance", "id_mapped_reads", "sample_total_reads", "sample_mapped_reads", "sample_total_bp", "sample_mapped_bp", "sample_average_total_reads_bp", "sample_average_mapped_reads_bp", "sample_mapped_reads_to_total_reads", "id_mapped_reads_per_million_sample_total_reads", "id_mapped_reads_per_million_sample_mapped_reads"]]
-            if self._non_zero_bool:
-                genomes_coverages_df = genomes_coverages_df[genomes_coverages_df.id_coverage_breadth.notnull()]
-            else:
-                genomes_coverages_df = genomes_coverages_df.fillna(0)
+            genomes_coverages_df = genomes_coverages_df.loc[:, [self._index_column, "id_bp", "id_coverage_breadth", "id_mapped_bp", "id_coverage_breadth_to_id_bp", "id_maximal_coverage_depth", "id_total_relative_abundance", "id_mapped_relative_abundance", "id_mapped_reads", "sample_total_reads", "sample_mapped_reads", "sample_total_bp", "sample_mapped_bp", "sample_average_total_reads_bp", "sample_average_mapped_reads_bp", "sample_mapped_reads_to_total_reads", "id_mapped_reads_per_million_sample_total_reads", "id_mapped_reads_per_million_sample_mapped_reads"]]
             for int_column in ["id_bp", "id_coverage_breadth", "id_mapped_bp", "id_maximal_coverage_depth", "id_mapped_reads", "sample_total_reads", "sample_mapped_reads", "sample_total_bp", "sample_mapped_bp"]:
                 genomes_coverages_df[int_column] = genomes_coverages_df[int_column].astype(int)
             if chunk_number == 0:
-                genomes_coverages_df.to_csv(self._pk.final_coverage_file_name, sep='\t', header=True, index=True)
+                genomes_coverages_df.to_csv(self._pk.final_coverage_file_name, sep='\t', header=True, index=False)
             else:
                 with open(file=self._pk.final_coverage_file_name, mode="a", encoding="utf-8") as f:
-                    genomes_coverages_df.to_csv(f, sep='\t', header=False, index=True)
+                    genomes_coverages_df.to_csv(f, sep='\t', header=False, index=False)
                 logging.info("Processed chunk {} with size of {} lines".format(chunk_number, chunk_size))
         logging.info("Finished processing coverage table: '{}'".format(self._pk.final_coverage_file_name))
 
