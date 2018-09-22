@@ -86,7 +86,7 @@ class Utilities:
 
     @staticmethod
     def dump_2d_array(array: list, file: str):
-        Utilities.dump_list(lst=["\t".join(str(i)) for i in array], file=file)
+        Utilities.dump_list(lst=["\t".join([str(i) for i in array])], file=file)
 
     @staticmethod
     def get_time():
