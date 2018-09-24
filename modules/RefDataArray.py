@@ -3,6 +3,7 @@
 
 
 import os
+import traceback
 from modules.Utilities import Utilities
 from modules.RefDataLine import RefDataLine
 
@@ -21,9 +22,10 @@ class RefDataArray:
     """
     _refdata_keys_list = ["reference_nfasta", "ebwt_mask", "bt2_mask", "fai", "genome", "annotation"]
 
-    def __init__(self, input_dict: dict):
+    def __init__(self, input_dict: dict, verify: bool = False):
         self._body_dict = input_dict
-        self._verify_json_refdata(self._body_dict)
+        if verify:
+            self._verify_json_refdata(self._body_dict)
 
     def _verify_json_refdata(self, d: dict):
         if len(d) == 0:
@@ -71,6 +73,7 @@ class RefDataArray:
             else:
                 return RefDataArray._parse_table_refdata(wrapper)
         except ValueError:
+            traceback.print_exc()
             Utilities.log_and_raise("Bad reference data file: {}".format(file))
 
     @staticmethod
