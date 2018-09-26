@@ -74,17 +74,17 @@ class FASTAArray(object):
         headers_zfill_number = len(str(len(self._parsed_fastas_list)))
         print("Managing {a} headers with {b}-digit filling. All changes would be saved into annotation file".format(a=len(self._parsed_fastas_list), b=headers_zfill_number))
         fixed_fastas_list = []
-        annotations_2d_array = [["reference_id", "former_id", "id_bp"]]
+        annotations_dict = {}
         headers_counter = 0
         for fasta in self._parsed_fastas_list:
             headers_counter += 1
             old_header = fasta.header
             fasta.set_header("ID" + str(headers_counter).zfill(headers_zfill_number))
             fixed_fastas_list.append(fasta)
-            annotations_2d_array.append([fasta.header, old_header, str(len(fasta))])
+            annotations_dict[fasta.header] = [fasta.header, old_header, str(len(fasta))]
         print("{} headers have been processed".format(headers_counter))
         self._parsed_fastas_list = fixed_fastas_list
-        self._annotations_2d_array = annotations_2d_array
+        self._annotations_2d_array = [["reference_id", "former_id", "id_bp"]] + [annotations_dict[k] for k in annotations_dict]
 
     @staticmethod
     def parse(string: str):
