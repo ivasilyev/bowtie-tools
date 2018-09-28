@@ -60,10 +60,14 @@ class CoverageExtractor:
                 d[re.sub(":$", "", line_list[1])] = line_list[2]
             if len(d) == 0:
                 logging.critical("Bad alignment: no SAMTools stats to extract!")
-            out = {"total_reads": d["raw total sequences"],
-                   "mapped_reads": d["reads mapped"],
-                   "total_bp": d["total length"],
-                   "mapped_bp": d["bases mapped"]}
+                return {}
+            try:
+                out = {"total_reads": d["raw total sequences"],
+                       "mapped_reads": d["reads mapped"],
+                       "total_bp": d["total length"],
+                       "mapped_bp": d["bases mapped"]}
+            except KeyError:
+                return {}
             return {"sample_{}".format(k): int(out[k]) for k in out}
 
         Utilities.batch_remove(self._pk.samtools_stats_file_name, self._pk.samtools_stats_log_file_name)
@@ -133,6 +137,9 @@ class CoverageExtractor:
     def _reference2statistics(self):
         Utilities.batch_remove(self._pk.final_coverage_file_name)
         stats_dict = self._samtools_stats_dict
+        if len(stats_dict) == 0:
+            logging.critical("Bad alignment: empty SAMTools stats: '{}'".format(self._pk.samtools_stats_file_name))
+            return
         if len(self._stacked_coverages_df) == 0:
             logging.critical("Bad alignment: empty stacked BEDTools coverage: '{}'".format(self._pk.stacked_coverage_file_name))
             return
