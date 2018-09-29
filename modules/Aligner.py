@@ -95,6 +95,8 @@ class Aligner:
         return cmd
 
     def run(self):
+        subprocess.getoutput("rm -f {}*".format(self._pk.samtools_sorted_file_name))
+        Utilities.batch_remove(self._pk.aligner_log_file_name)
         bwt_cmd_string = " ".join(self._get_cmd())
         pipeline = """{a} 2> {b} | \
         samtools view - -bu -@ {c} | \

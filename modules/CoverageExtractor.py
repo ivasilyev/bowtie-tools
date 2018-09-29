@@ -22,7 +22,8 @@ class CoverageExtractor:
         self._stacked_coverages_df = pd.DataFrame()
 
     def _sam2bam2sorted_bam(self):
-        Utilities.batch_remove(self._pk.samtools_sorted_file_name, self._pk.samtools_converted_log_file_name)
+        subprocess.getoutput("rm -f {}*".format(self._pk.samtools_sorted_file_name))
+        Utilities.batch_remove(self._pk.samtools_converted_log_file_name)
         # SamTools details: http://www.htslib.org/doc/samtools.html
         # Avoiding self._pk.samtools_converted_file_name
         s = subprocess.getoutput("samtools view -bu -@ 1 {a} | \
