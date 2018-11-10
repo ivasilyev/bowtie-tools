@@ -9,7 +9,7 @@ from modules.Utilities import Utilities
 
 
 class PathsKeeper:
-    def __init__(self, sampledata: SampleDataLine, refdata: RefDataLine, output_dir: str):
+    def __init__(self, sampledata: SampleDataLine, refdata: RefDataLine, input_mask: str, output_dir: str):
         # Output directories
         output_dir = Utilities.ends_with_slash(output_dir)
         unmapped_reads_directory = "{}Unmapped_reads/".format(output_dir)
@@ -25,8 +25,8 @@ class PathsKeeper:
         self.bedtools_genome_file = refdata.bedtools_genome_file
         self.annotation_file = refdata.annotation_file
         # Output masks
-        mapped_output_mask = refdata.db_name
-        unmapped_output_mask = "_".join(["no", mapped_output_mask])
+        mapped_output_mask = "{}_{}".format(input_mask, refdata.db_name).strip("_")
+        unmapped_output_mask = "{}_no_{}".format(input_mask, refdata.db_name).strip("_")
         # Sample data
         sample_name = sampledata.name
         self.raw_reads_files_list = sampledata.raw_reads_files_list

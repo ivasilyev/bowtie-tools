@@ -80,12 +80,19 @@ class PipelineHandler:
         self._refdata = refdata
 
     def _run_aligner(self, sampledata):
-        keeper = PathsKeeper(sampledata=sampledata, refdata=self._refdata, output_dir=mainInitializer.output_dir)
-        aligner = Aligner(keeper, threads_number=mainInitializer.threads_number)
+        keeper = PathsKeeper(sampledata=sampledata,
+                             refdata=self._refdata,
+                             input_mask=mainInitializer.input_mask,
+                             output_dir=mainInitializer.output_dir)
+        aligner = Aligner(keeper,
+                          threads_number=mainInitializer.threads_number)
         aligner.run()
 
     def _run_extractor(self, sampledata):
-        keeper = PathsKeeper(sampledata=sampledata, refdata=self._refdata, output_dir=mainInitializer.output_dir)
+        keeper = PathsKeeper(sampledata=sampledata,
+                             refdata=self._refdata,
+                             input_mask=mainInitializer.input_mask,
+                             output_dir=mainInitializer.output_dir)
         extractor = CoverageExtractor(keeper)
         extractor.run()
 
