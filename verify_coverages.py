@@ -106,9 +106,12 @@ class CoveragesVerifier:
 
     def export(self):
         sampledatas_2d_array = [i for i in self._queue if i[0] in self._no_coverages_df["sample_name"].values.tolist()]
-        os.makedirs(os.path.dirname(mainInitializer.output), exist_ok=True)
-        Utilities.dump_2d_array(sampledatas_2d_array, file=mainInitializer.output)
-        print("Done. \nFiles to process: {} \nDumped sample data: '{}'".format(len(self._no_coverages_df), mainInitializer.output))
+        if len(sampledatas_2d_array) == 0:
+            print("All files have correct number of lines. No files to process")
+        else:
+            os.makedirs(os.path.dirname(mainInitializer.output), exist_ok=True)
+            Utilities.dump_2d_array(sampledatas_2d_array, file=mainInitializer.output)
+            print("Files to process: {}\nDumped sample data: '{}'".format(len(self._no_coverages_df), mainInitializer.output))
         if mainInitializer.debugging_bool:
             debug_table = "{}_debug.tsv".format(mainInitializer.output)
             self._verified_df.to_csv(debug_table, sep='\t', header=True, index=False)
@@ -116,6 +119,7 @@ class CoveragesVerifier:
 
     def main(self):
         self.combine_dfs()
+        print("Coverage tables verification is complete")
         self.export()
 
 
