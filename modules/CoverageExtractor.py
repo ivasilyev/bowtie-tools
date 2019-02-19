@@ -174,6 +174,7 @@ class CoverageExtractor:
                                "id_mapped_reads", "sample_total_reads", "sample_mapped_reads", "sample_total_bp",
                                "sample_mapped_bp"]:
                 genomes_coverages_df[int_column] = genomes_coverages_df[int_column].astype(int)
+            genomes_coverages_df = genomes_coverages_df.loc[:, [i for i in list(genomes_coverages_df) if len(i.strip()) > 0]]
             if chunk_number == 0:
                 genomes_coverages_df.to_csv(self._pk.final_coverage_file_name, sep='\t', header=True, index=False)
             else:
