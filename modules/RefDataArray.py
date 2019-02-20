@@ -91,7 +91,8 @@ class RefDataArray:
             nfasta_file = annotation_dict.get("reference_nfasta")
             if not nfasta_file:
                 continue
-            indexing_dict = RefDataLine.fill_dict(nfasta_file)
+            indexing_dict = {"alias": Utilities.filename_only(nfasta_file)}
+            indexing_dict.update(RefDataLine.fill_dict(nfasta_file))
             indexing_dict.update(annotation_dict)
             print("Processing nFASTA: '{}'".format(nfasta_file))
             refdata = RefDataLine(indexing_dict)

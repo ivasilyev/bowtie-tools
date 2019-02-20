@@ -13,7 +13,9 @@ class RefDataLine:
 
     def __init__(self, parsed_dictionary: dict):
         self._nfasta = parsed_dictionary["reference_nfasta"]
-        self.db_name = Utilities.filename_only(self._nfasta)
+        self.db_name = parsed_dictionary.get("alias")
+        if not self.db_name:
+            self.db_name = Utilities.filename_only(self._nfasta)
         self._reference_mask = Utilities.ends_with_slash(os.path.dirname(os.path.realpath(self._nfasta))) + self.db_name
         self.bowtie_index_mask = parsed_dictionary["ebwt_mask"]
         self.bowtie2_index_mask = parsed_dictionary["bt2_mask"]
