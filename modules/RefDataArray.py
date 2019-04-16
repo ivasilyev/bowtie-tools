@@ -26,6 +26,7 @@ class RefDataArray:
         self._body_dict = input_dict
         if verify:
             self._verify_json_refdata(self._body_dict)
+        self.refdata_lines_dict = {k: RefDataLine(self._body_dict[k]) for k in self._body_dict}
 
     def _verify_json_refdata(self, d: dict):
         if len(d) == 0:
@@ -42,7 +43,7 @@ class RefDataArray:
                     raise ValueError("Not found file: '{}', keys: '{}', '{}'".format(f, k1, k2))
 
     def get_parsed_list(self):
-        return [RefDataLine(parsed_dictionary=self._body_dict[k]) for k in self._body_dict]
+        return [self.refdata_lines_dict[k] for k in self.refdata_lines_dict]
 
     def get_refdata_line_by_index(self, idx: int):
         return self.get_parsed_list()[idx]
