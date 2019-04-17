@@ -34,6 +34,9 @@ class FASTALine:
     def __eq__(self, other):
         return self.sequence == other.sequence
 
+    def __lt__(self, other):
+        return len(self) < len(other)
+
     def get_total_length(self):
         return len(self.to_str())
 
@@ -48,5 +51,5 @@ class FASTALine:
 
     def set_header(self, header):
         if header:
-            if len(header) > 0:
-                self.header = header
+            if len(header.strip()) > 0:
+                self.header = header.strip()

@@ -90,7 +90,7 @@ class FASTAArray(object):
     def parse(string: str):
         string = "\n" + re.sub("[\r\n]+", "\n", string).strip()
         q = [">{}".format(j) for j in Utilities.remove_empty_values([i.strip() for i in string.split("\n>")])]
-        return FASTAArray(list(set([FASTALine(i) for i in q])))
+        return FASTAArray(sorted(set([FASTALine(i) for i in q]), reverse=True))
 
     @staticmethod
     def prepare_nfasta_for_indexing(input_file: str, output_dir: str, preserve_headers: bool = False, chop: bool = False, chunk_length: int = int(3.6 * 10 ** 9)):
