@@ -139,7 +139,7 @@ Completed command arguments: '{a}'; exit code: {b}; STDOUT details:
     def multi_core_queue(func, queue: list, processes: int = int(subprocess.getoutput("nproc").strip())):
         import multiprocessing
         pool = multiprocessing.Pool(processes=processes)
-        output = pool.map_async(func, queue)
+        output = pool.map(func, queue)
         pool.close()
         pool.join()
         return output
