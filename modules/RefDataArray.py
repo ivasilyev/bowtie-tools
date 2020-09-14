@@ -74,8 +74,10 @@ class RefDataArray:
             else:
                 return RefDataArray._parse_table_refdata(wrapper)
         except ValueError:
+            wrapper.close()
             traceback.print_exc()
             Utilities.log_and_raise("Bad reference data file: {}".format(file))
+        wrapper.close()
 
     @staticmethod
     def compile(input_file: str, output_dir: str, preserve_headers: bool = False, chop: bool = False, chunk_length: int = int(3.6 * 10 ** 9)):
